@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AI-Powered Real-Time QA Dashboard — Anomaly detection, predictive analytics, and intelligent bottleneck analysis for test pipelines." />
+  <title>AI-Powered QA Dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="app">
+    <header id="dashboard-header"></header>
+    <main id="dashboard-main">
+      <section id="kpi-strip" class="kpi-strip"></section>
+
+      <section id="ai-section" class="ai-section">
+        <div class="ai-section-header">
+          <h2 class="ai-title"><span class="ai-pulse"></span> 🧠 AI-Powered Analysis <span class="ai-badge">LIVE</span></h2>
+          <span class="ai-engine-tag">Z-Score · IQR · EWMA · Linear Regression · Pearson Correlation</span>
+        </div>
+        <div class="ai-panels-grid">
+          <div id="ai-insights-panel" class="panel ai-insights-panel">
+            <h3>🎯 AI Insights & Risk Score</h3>
+            <div id="ai-insights-content"></div>
+          </div>
+          <div id="anomaly-alerts-panel" class="panel anomaly-alerts-panel">
+            <h3>🚨 Anomaly Detection</h3>
+            <div id="anomaly-alerts-content"></div>
+          </div>
+          <div id="predictions-panel" class="panel predictions-panel">
+            <h3>🔮 Predictive Forecast</h3>
+            <div id="predictions-content"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="suite-cards" class="suite-cards-grid"></section>
+      <section id="charts-row" class="charts-row">
+        <div id="chart-failure-trend" class="chart-panel">
+          <h3>Failure Rate Trend <span class="chart-subtitle">Last 7 Days</span></h3>
+          <canvas id="failureTrendCanvas"></canvas>
+        </div>
+        <div id="chart-exec-time" class="chart-panel">
+          <h3>Execution Time <span class="chart-subtitle">By Suite (min)</span></h3>
+          <canvas id="execTimeCanvas"></canvas>
+        </div>
+      </section>
+      <section id="bottom-row" class="bottom-row">
+        <div id="bottleneck-panel" class="panel bottleneck-panel">
+          <h3>🔍 Bottleneck Detection</h3>
+          <div id="bottleneck-list"></div>
+        </div>
+        <div id="cicd-panel" class="panel cicd-panel">
+          <h3>⚡ Live CI/CD Runs</h3>
+          <div id="cicd-list"></div>
+        </div>
+        <div id="activity-panel" class="panel activity-panel">
+          <h3>📋 Activity Feed</h3>
+          <div id="activity-list"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
