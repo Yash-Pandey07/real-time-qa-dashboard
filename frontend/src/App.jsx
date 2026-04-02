@@ -48,32 +48,32 @@ export default function App() {
 
   // Bootstrap via REST on mount
   useEffect(() => {
-    fetch(`${API_BASE}/api/ci/runs?limit=100').then(r => r.json()).then(d => { if (d.runs) setCiRuns(d.runs); }).catch(() => {});
-    fetch(`${API_BASE}/api/ci/heatmap').then(r => r.json()).then(d => { if (d.grid) setHeatmapData(d.grid); }).catch(() => {});
-    fetch(`${API_BASE}/api/jira/issues?limit=50').then(r => r.json()).then(d => {
+    fetch(`${API_BASE}/api/ci/runs?limit=100`).then(r => r.json()).then(d => { if (d.runs) setCiRuns(d.runs); }).catch(() => {});
+    fetch(`${API_BASE}/api/ci/heatmap`).then(r => r.json()).then(d => { if (d.grid) setHeatmapData(d.grid); }).catch(() => {});
+    fetch(`${API_BASE}/api/jira/issues?limit=50`).then(r => r.json()).then(d => {
       if (d.issues) setJiraData(prev => ({ ...prev, allIssues: d.issues, metrics: d.metrics || {} }));
     }).catch(() => {});
-    fetch(`${API_BASE}/api/jira/projects').then(r => r.json()).then(d => {
+    fetch(`${API_BASE}/api/jira/projects`).then(r => r.json()).then(d => {
       if (d.projects) setJiraData(prev => ({ ...prev, projects: d.projects }));
     }).catch(() => {});
-    fetch(`${API_BASE}/api/tests/cycles').then(r => r.json()).then(d => {
+    fetch(`${API_BASE}/api/tests/cycles`).then(r => r.json()).then(d => {
       if (d.testCycles) setTestData(prev => ({ ...prev, testCycles: d.testCycles, summary: d.summary || {} }));
     }).catch(() => {});
-    fetch(`${API_BASE}/api/tests/executions?limit=100').then(r => r.json()).then(d => {
+    fetch(`${API_BASE}/api/tests/executions?limit=100`).then(r => r.json()).then(d => {
       if (d.testExecutions) setTestData(prev => ({ ...prev, testExecutions: d.testExecutions }));
     }).catch(() => {});
-    fetch(`${API_BASE}/api/bottlenecks').then(r => r.json()).then(d => {
+    fetch(`${API_BASE}/api/bottlenecks`).then(r => r.json()).then(d => {
       if (d.bottlenecks) setBottlenecks(d.bottlenecks);
     }).catch(() => {});
   }, []);
 
   // Keep heatmap in sync when ciRuns update
   useEffect(() => {
-    fetch(`${API_BASE}/api/ci/heatmap').then(r => r.json()).then(d => { if (d.grid) setHeatmapData(d.grid); }).catch(() => {});
+    fetch(`${API_BASE}/api/ci/heatmap`).then(r => r.json()).then(d => { if (d.grid) setHeatmapData(d.grid); }).catch(() => {});
   }, [ciRuns]);
 
   const handleRefresh = () => {
-    fetch(`${API_BASE}/api/refresh', { method: 'POST' }).catch(() => {});
+    fetch(`${API_BASE}/api/refresh`, { method: 'POST' }).catch(() => {});
   };
 
   const ciPassRate = (() => {
