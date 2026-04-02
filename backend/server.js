@@ -8,7 +8,7 @@ const apiRouter = require('./routes/api');
 const poller    = require('./services/poller');
 
 const app = express();
-app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'] }));
+app.use(cors({ origin: true }));
 app.use(express.json());
 app.use('/api', apiRouter);
 app.get('/', (req, res) => res.json({ service: 'QA Dashboard API', status: 'running' }));
