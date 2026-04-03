@@ -56,7 +56,12 @@ function CycleCard({ cycle }) {
                   <Cell key={i} fill={STATUS_COLORS[entry.name] || '#334155'} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', color: '#e2e8f0', fontSize: 11 }} />
+              <Tooltip
+                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}
+                labelStyle={{ color: '#e2e8f0', fontWeight: 600, marginBottom: 4 }}
+                itemStyle={{ color: '#94a3b8' }}
+                formatter={(value, name) => [value, name]}
+              />
             </PieChart>
           </ResponsiveContainer>
         </div>

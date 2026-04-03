@@ -132,7 +132,7 @@ export default function App() {
         {activeSection === 'pipeline'    && <CIPipeline runs={ciRuns} />}
         {activeSection === 'jira'        && <JiraBoard jiraData={jiraData} />}
         {activeSection === 'tests'       && <TestResults testData={testData} />}
-        {activeSection === 'bottlenecks' && <Bottlenecks bottlenecks={bottlenecks} />}
+        {activeSection === 'bottlenecks' && <Bottlenecks bottlenecks={bottlenecks} onNavigate={setActiveSection} />}
       </div>
     </div>
   );

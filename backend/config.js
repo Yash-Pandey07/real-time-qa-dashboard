@@ -13,7 +13,7 @@ module.exports = {
       { owner: 'vercel',    repo: 'next.js', label: 'Next.js' },
       { owner: 'nodejs',    repo: 'node',    label: 'Node.js' },
     ],
-    runsPerRepo: 20,
+    runsPerRepo: 30,
   },
   jira: {
     baseUrl: process.env.JIRA_BASE_URL || 'https://issues.apache.org/jira',

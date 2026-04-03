@@ -20,11 +20,48 @@ router.get('/ci/heatmap', (req, res) => {
   const runs    = poller.getState().ciRuns;
   const modules = [...new Set(runs.map(r => r.repoLabel || 'Unknown'))];
   const grid = modules.map(module => {
-    const moduleRuns = runs.filter(r => r.repoLabel === module).slice(0, 12);
+    const moduleRuns = runs.filter(r => r.repoLabel === module).slice(0, 30);
+    const completed  = moduleRuns.filter(r => r.durationSec > 0);
+    const avgDuration = completed.length
+      ? Math.round(completed.reduce((s, r) => s + r.durationSec, 0) / completed.length)
+      : 0;
+
+    // Trend: compare pass rate of most recent 10 vs previous 10
+    const recent = moduleRuns.slice(0, 10);
+    const older  = moduleRuns.slice(10, 20);
+    const recentPass = recent.length ? recent.filter(r => r.status === 'success').length / recent.length : null;
+    const olderPass  = older.length  ? older.filter(r => r.status === 'success').length  / older.length  : null;
+    const trend = recentPass === null ? 'neutral'
+      : olderPass === null ? 'neutral'
+      : recentPass > olderPass + 0.05 ? 'improving'
+      : recentPass < olderPass - 0.05 ? 'degrading'
+      : 'stable';
+
+    // Workflow name breakdown
+    const workflowCounts = moduleRuns.reduce((acc, r) => {
+      const name = r.name || 'Unknown';
+      acc[name] = (acc[name] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Last 3 failures with detail
+    const recentFailures = moduleRuns
+      .filter(r => r.status === 'failure')
+      .slice(0, 3)
+      .map(r => ({ runNumber: r.runNumber, branch: r.branch, commitSha: r.commitSha, startedAt: r.startedAt, durationSec: r.durationSec, url: r.url, actor: r.actor, name: r.name }));
+
+    const pass = moduleRuns.filter(r => r.status === 'success').length;
+    const fail = moduleRuns.filter(r => r.status === 'failure').length;
+
     return {
-      module, slots: moduleRuns.map(r => ({ runId: r.id, runNumber: r.runNumber, status: r.status, branch: r.branch, commitSha: r.commitSha, startedAt: r.startedAt, durationSec: r.durationSec, url: r.url })),
-      total: moduleRuns.length, pass: moduleRuns.filter(r => r.status === 'success').length, fail: moduleRuns.filter(r => r.status === 'failure').length,
-      passRate: moduleRuns.length ? Math.round(moduleRuns.filter(r => r.status === 'success').length / moduleRuns.length * 100) : 0,
+      module,
+      slots: moduleRuns.map(r => ({ runId: r.id, runNumber: r.runNumber, status: r.status, branch: r.branch, commitSha: r.commitSha, startedAt: r.startedAt, durationSec: r.durationSec, url: r.url, name: r.name, actor: r.actor })),
+      total: moduleRuns.length, pass, fail,
+      passRate: moduleRuns.length ? Math.round(pass / moduleRuns.length * 100) : 0,
+      avgDuration,
+      trend,
+      workflowCounts,
+      recentFailures,
     };
   });
   res.json({ grid, fetchedAt: poller.getState().lastPollAt.ci });
