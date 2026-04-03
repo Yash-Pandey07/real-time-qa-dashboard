@@ -67,6 +67,12 @@ All data is held in memory on the backend (the `state` object inside `poller.js`
 - Data is always fresh (re-fetched on a schedule)
 - The trade-off: data resets when the server restarts — acceptable for a live dashboard
 
+> **Roadmap:** Supabase integration is planned to add persistence for CI runs, bottleneck history, and self-healing incident records.
+
+### Analytics
+
+Vercel Analytics (`@vercel/analytics/react`) is integrated into the frontend. It tracks page views and visitor counts with no cookies and no GDPR banners required. Data is visible in the Vercel dashboard under the Analytics tab.
+
 ---
 
 ## 3. Folder Structure
@@ -408,10 +414,15 @@ Always visible below the header.
 ### Heat Map
 A grid where:
 - Each **row** = one repository/module
-- Each **cell** = one of the last 12 pipeline runs, coloured by status
+- Each **cell** = one of the last **30** pipeline runs, coloured by status
 - **Rightmost cell** = the most recent run
-- **Hover** on any cell = tooltip showing branch, commit SHA, duration, time ago
-- **Pass rate bar** at the end of each row shows the ratio visually
+- **Hover** on any cell = portal tooltip (rendered at document body level — never clipped by any container) showing workflow name, branch, commit SHA, actor, duration, time ago
+- **Trend arrow** per row: compares pass rate of most recent 10 runs vs previous 10 → ↑ Improving / → Stable / ↓ Degrading
+- **Average duration** shown per repo
+- **Pass / fail count** + percentage bar per row
+- **Expand failures button** — when a repo has recent failures, clicking expands an inline panel showing the last 3 failed runs with commit SHA, branch, workflow name, duration, and a direct GitHub link
+- **0 failures badge** — always rendered (green) to keep row layout stable when there are no failures
+- **Summary bar** above the grid — total runs, total passed, total failed, overall pass rate, count of improving/degrading repos across all repos
 
 This gives an immediate visual "is this repo healthy or not" without reading any numbers.
 
@@ -441,6 +452,8 @@ Filterable by severity. Each card shows:
 - Severity icon + colour-coded left border
 - Title + severity badge + type label
 - Module name + metric
+- **Source badge** — shows which system the issue came from (GitHub Actions / Jira / Zephyr), colour-coded per source. Clicking the badge navigates directly to the relevant dashboard section (CI Pipeline / Jira Board / Test Results)
+- **Detection timestamp** — "Detected X ago"
 - Expandable "Show details" → full description + recommendation box
 
 ---
@@ -568,4 +581,32 @@ All environment variables in `backend/.env`:
 
 ---
 
-*Last updated: April 2026 — reflects the current working POC state.*
+## 16. Production Deployment
+
+### Backend — Railway
+- Platform: [railway.app](https://railway.app)
+- URL: `https://your-app.railway.app`
+- Auto-deploys on push to `main`
+- Environment variables set in Railway dashboard (never in code)
+- WebSocket supported natively — no additional config needed
+- PORT is set automatically by Railway; `config.js` reads `process.env.PORT`
+
+### Frontend — Vercel
+- Platform: [vercel.com](https://vercel.com)
+- URL: `https://your-app.vercel.app`
+- Root directory set to `frontend/` in Vercel project settings
+- Auto-deploys on push to `main`
+- Environment variables required:
+  ```
+  VITE_API_URL=https://your-app.railway.app
+  VITE_WS_URL=wss://real-time-qa-dashboard-production.up.railway.app/ws
+  ```
+- In production, `useWebSocket.js` reads `VITE_WS_URL` (falls back to localhost for local dev)
+- In production, `App.jsx` prefixes all fetch calls with `VITE_API_URL` (falls back to empty string → Vite proxy in local dev)
+
+### CORS
+Backend allows all origins (`origin: true`) to support the Vercel frontend domain without hardcoding it.
+
+---
+
+*Last updated: April 2026 — reflects current deployed state with all improvements.*

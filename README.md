@@ -2,7 +2,9 @@
 
 A live QA intelligence platform that aggregates CI/CD pipeline status, Jira bug tracking, and test results into a single real-time dashboard — with AI-powered bottleneck detection.
 
-![Stack](https://img.shields.io/badge/Backend-Node.js%20%2B%20Express-green) ![Stack](https://img.shields.io/badge/Frontend-React%2018%20%2B%20Vite-blue) ![Stack](https://img.shields.io/badge/Realtime-WebSockets-orange)
+![Stack](https://img.shields.io/badge/Backend-Node.js%20%2B%20Express-green) ![Stack](https://img.shields.io/badge/Frontend-React%2018%20%2B%20Vite-blue) ![Stack](https://img.shields.io/badge/Realtime-WebSockets-orange) ![Stack](https://img.shields.io/badge/Deployed-Railway%20%2B%20Vercel-purple)
+
+**Live:** [project-p0adc.vercel.app](https://project-p0adc.vercel.app)        
 
 ---
 
@@ -29,7 +31,10 @@ Every number updates automatically via WebSockets — no refresh needed.
 | HTTP client | Axios |
 | Frontend | React 18 + Vite |
 | Charts | Recharts + Chart.js |
+| Analytics | Vercel Analytics |
 | Styling | Inline styles (dark theme) |
+| Backend hosting | Railway |
+| Frontend hosting | Vercel |
 
 ---
 
@@ -38,7 +43,7 @@ Every number updates automatically via WebSockets — no refresh needed.
 ```
 real-time-qa-dashboard/
 ├── backend/
-│   ├── server.js           # Express + WebSocket server (port 3001)
+│   ├── server.js           # Express + WebSocket server
 │   ├── config.js           # Repos, Jira projects, polling intervals
 │   ├── adapters/
 │   │   ├── github.js       # GitHub Actions + check-runs fetcher
@@ -55,13 +60,13 @@ real-time-qa-dashboard/
 │       ├── hooks/
 │       │   └── useWebSocket.js  # Auto-reconnecting WebSocket hook
 │       └── components/
-│           ├── Header.jsx
-│           ├── SummaryCards.jsx
-│           ├── HeatMap.jsx
-│           ├── CIPipeline.jsx
-│           ├── JiraBoard.jsx
-│           ├── TestResults.jsx
-│           └── Bottlenecks.jsx
+│           ├── Header.jsx        # Live clock, connection status, refresh
+│           ├── SummaryCards.jsx  # 4 KPI cards
+│           ├── HeatMap.jsx       # Pipeline grid — last 30 runs per repo
+│           ├── CIPipeline.jsx    # Filterable pipeline run table
+│           ├── JiraBoard.jsx     # Charts + issue table
+│           ├── TestResults.jsx   # Zephyr-format cycles + executions
+│           └── Bottlenecks.jsx   # AI-detected issues with source navigation
 ├── .env.example
 └── start.bat               # Windows one-click launcher
 ```
@@ -76,7 +81,7 @@ real-time-qa-dashboard/
 
 ### 1. Clone the repo
 ```bash
-git clone https://github.com/YOUR_USERNAME/real-time-qa-dashboard.git
+git clone https://github.com/Yash-Pandey07/real-time-qa-dashboard.git
 cd real-time-qa-dashboard
 ```
 
@@ -97,7 +102,7 @@ cd backend && npm install
 cd ../frontend && npm install
 ```
 
-### 4. Run
+### 4. Run locally
 **Option A — Windows (one click):**
 ```
 start.bat
@@ -116,15 +121,60 @@ Open http://localhost:5173
 
 ---
 
+## Deployment
+
+| Service | Platform | URL |
+|---------|----------|-----|
+| Backend (Node.js + WebSocket) | Railway | https://real-time-qa-dashboard-production.up.railway.app |    
+| Frontend (React + Vite) | Vercel |  https://project-p0adc.vercel.app |
+
+Auto-deploys on every push to `main`. Environment variables are set in each platform's dashboard — never stored in the repo.
+
+### Frontend environment variables (set in Vercel)
+```
+VITE_API_URL=https://your-app.railway.app
+VITE_WS_URL=wss://real-time-qa-dashboard-production.up.railway.app/ws
+```
+
+---
+
 ## Data Sources
 
 | Source | What it provides |
 |--------|----------------|
-| GitHub Actions (microsoft/vscode, facebook/react, vercel/next.js, nodejs/node) | Live CI pipeline runs |
+| GitHub Actions (microsoft/vscode, facebook/react, vercel/next.js, nodejs/node) | Live CI pipeline runs — last 30 per repo |
 | Apache Jira — KAFKA, HADOOP, SPARK projects (public) | Real bug/issue data |
 | GitHub Check Runs (normalised to Zephyr format) | Test execution results |
 
 All sources are **public APIs** — the dashboard works out of the box with just a GitHub token.
+
+---
+
+## Dashboard Sections
+
+### 🔥 Heat Map
+- Last **30 runs** per repository, colour-coded by status
+- **Trend indicator** per repo: ↑ Improving / → Stable / ↓ Degrading (compares last 10 vs previous 10 runs)
+- **Average duration** displayed per repo
+- **Hover any cell** — portal tooltip shows branch, commit SHA, actor, duration, time ago (never clipped by container)
+- **Expand failures** — inline panel shows last 3 failures with commit, branch, and GitHub link
+- **Summary bar** — total runs, passed, failed, overall rate across all repos
+
+### ⚙️ CI Pipeline
+Filterable table of all runs. Filter by status and repo. Columns: status, repo, branch, commit, workflow, duration, actor, GitHub link.
+
+### 🐛 Jira Board
+Bar charts (status + priority distribution) above a filterable issue table.
+
+### ✅ Test Results
+Zephyr-format test cycles with donut charts, stat chips, and individual execution list.
+
+### 🤖 Bottlenecks
+AI-detected issues with:
+- Severity ranking (Critical → High → Medium → Low)
+- **Source badge** showing which system the issue came from (GitHub Actions / Jira / Zephyr) — **clickable, navigates directly to that section**
+- Detection timestamp
+- Expandable description + actionable recommendation
 
 ---
 
@@ -146,37 +196,47 @@ Edit the `repos` array in `backend/config.js`.
 
 ## AI Bottleneck Detection
 
-The bottleneck engine analyses live data and surfaces issues automatically:
+The bottleneck engine analyses live data across all three sources after every poll cycle:
 
-| Rule | Triggers when |
-|------|--------------|
-| High CI failure rate | ≥50% of runs failed in a module |
-| Consecutive failures | Last 3+ runs all failed |
-| Duration spike | Latest run took >2× the average |
-| Stuck pipeline | A run in-progress for over 1 hour |
-| Bug cluster | ≥5 open bugs in the same component |
-| Critical bugs | ≥3 unresolved Critical/Blocker bugs |
-| WIP pile-up | >50% of issues are "In Progress" |
-| Low test pass rate | Overall pass rate <70% |
+| Rule | Triggers when | Severity |
+|------|--------------|----------|
+| High CI failure rate | ≥50% of runs failed in a module | High (≥80% → Critical) |
+| Consecutive failures | Last 3+ runs all failed | Critical |
+| Duration spike | Latest run took >2× the average | Medium |
+| Stuck pipeline | A run in-progress for over 1 hour | High |
+| Bug cluster | ≥5 open bugs in the same component | High (≥10 → Critical) |
+| Critical bugs | ≥3 unresolved Critical/Blocker bugs | High |
+| WIP pile-up | >50% of issues are "In Progress" | Medium |
+| Low test pass rate | Overall pass rate <70% | High (<50% → Critical) |
 
-Each bottleneck includes a severity (Critical / High / Medium), description, and actionable recommendation.
+Each bottleneck includes severity, source system, description, metric, and actionable recommendation.
 
 ---
 
 ## REST API
 
-Base URL: `http://localhost:3001`
+Backend base URL: `https://your-app.railway.app`
+Local: `http://localhost:3001`
 
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/status` | Health check |
 | `GET /api/ci/runs` | Pipeline runs |
-| `GET /api/ci/heatmap` | Heatmap grid |
+| `GET /api/ci/heatmap` | Heatmap grid (30 runs per repo) |
 | `GET /api/jira/issues` | Jira issues |
 | `GET /api/tests/cycles` | Test cycles |
 | `GET /api/tests/executions` | Test executions |
 | `GET /api/bottlenecks` | Detected bottlenecks |
 | `POST /api/refresh` | Force re-fetch (flush cache) |
+
+---
+
+## Roadmap
+
+- [ ] Supabase integration — persist CI runs, bottlenecks, and incidents across restarts
+- [ ] Incidents tab — real-time view of self-healing script outcomes
+- [ ] Auto-rerun — detect consecutive failures and trigger GitHub Actions re-run automatically
+- [ ] Your own GitHub Actions repo — report CI failures directly to the dashboard
 
 ---
 
