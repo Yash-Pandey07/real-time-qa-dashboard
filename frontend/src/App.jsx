@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { useWebSocket } from './hooks/useWebSocket.js';
 import Header from './components/Header.jsx';
 import SummaryCards from './components/SummaryCards.jsx';
@@ -134,6 +135,7 @@ export default function App() {
         {activeSection === 'tests'       && <TestResults testData={testData} />}
         {activeSection === 'bottlenecks' && <Bottlenecks bottlenecks={bottlenecks} onNavigate={setActiveSection} />}
       </div>
+      <Analytics />
     </div>
   );
 }
