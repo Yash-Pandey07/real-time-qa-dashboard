@@ -61,7 +61,7 @@ async function fetchRepoRuns({ owner, repo, label }) {
       module:       label,
       component:    run.name,
     }));
-    cache.set(cacheKey, runs, 80);
+    cache.set(cacheKey, runs, 570);
     return runs;
   } catch (err) {
     console.error(`[GitHub] Error fetching runs for ${owner}/${repo}:`, err.message);
@@ -92,9 +92,14 @@ async function fetchRepoCheckRuns({ owner, repo, label }) {
   const cached   = cache.get(cacheKey);
   if (cached) return cached;
   try {
-    // Step 1: get default branch name
-    const repoRes     = await gh.get(`/repos/${owner}/${repo}`);
-    const defaultBranch = repoRes.data.default_branch || 'main';
+    // Step 1: get default branch name (cached separately for 24h — rarely changes)
+    const branchCacheKey = `gh:branch:${owner}/${repo}`;
+    let defaultBranch = cache.get(branchCacheKey);
+    if (!defaultBranch) {
+      const repoRes = await gh.get(`/repos/${owner}/${repo}`);
+      defaultBranch = repoRes.data.default_branch || 'main';
+      cache.set(branchCacheKey, defaultBranch, 86400);
+    }
 
     // Step 2: get check runs for the latest commit on default branch
     // GET /repos/{owner}/{repo}/commits/{ref}/check-runs is the correct listing endpoint
@@ -161,7 +166,7 @@ async function fetchRepoCheckRuns({ owner, repo, label }) {
     }));
 
     const result = { testCycle, testExecutions };
-    cache.set(cacheKey, result, 80);
+    cache.set(cacheKey, result, 570);
     return result;
   } catch (err) {
     console.error(`[GitHub] Error fetching check-runs for ${owner}/${repo}:`, err.message);

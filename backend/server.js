@@ -1,13 +1,15 @@
 require('dotenv').config();
-const http      = require('http');
-const express   = require('express');
-const cors      = require('cors');
-const WebSocket = require('ws');
+const http        = require('http');
+const express     = require('express');
+const cors        = require('cors');
+const compression = require('compression');
+const WebSocket   = require('ws');
 const config    = require('./config');
 const apiRouter = require('./routes/api');
 const poller    = require('./services/poller');
 
 const app = express();
+app.use(compression());
 app.use(cors({ origin: true }));
 app.use(express.json());
 app.use('/api', apiRouter);

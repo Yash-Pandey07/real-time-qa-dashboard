@@ -13,7 +13,7 @@ module.exports = {
       { owner: 'vercel',    repo: 'next.js', label: 'Next.js' },
       { owner: 'nodejs',    repo: 'node',    label: 'Node.js' },
     ],
-    runsPerRepo: 30,
+    runsPerRepo: 15,
   },
   jira: {
     baseUrl: process.env.JIRA_BASE_URL || 'https://issues.apache.org/jira',
@@ -33,8 +33,8 @@ module.exports = {
     projectKey: process.env.ZEPHYR_PROJECT   || '',
   },
   poll: {
-    githubIntervalSeconds: 90,
-    jiraIntervalSeconds:   120,
-    testIntervalSeconds:   90,
+    githubIntervalSeconds: 600,   // 10 min (was 90s)
+    jiraIntervalSeconds:   900,   // 15 min (was 2 min)
+    testIntervalSeconds:   600,   // 10 min (was 90s)
   },
 };
