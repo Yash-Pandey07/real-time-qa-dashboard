@@ -310,8 +310,11 @@ export default function HeatMap({ grid = [] }) {
   return (
     <div>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 20 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#e2e8f0', margin: 0 }}>Pipeline Heat Map</h2>
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#e2e8f0', margin: '0 0 4px 0' }}>
+          Pipeline Heat Map
+          <span style={{ color: '#6366f1' }}> — Open Source CI Pipelines</span>
+        </h2>
         <span style={{ color: '#64748b', fontSize: 12 }}>last 30 runs per repo · hover a cell for details · click to open run on GitHub</span>
       </div>
 

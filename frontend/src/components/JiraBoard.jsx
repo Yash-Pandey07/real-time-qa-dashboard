@@ -50,7 +50,23 @@ export default function JiraBoard({ jiraData = {} }) {
 
   return (
     <div>
-      <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: '#e2e8f0' }}>Jira Board</h2>
+      <div style={{ marginBottom: 16 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#e2e8f0', marginBottom: 6 }}>JIRA Board</h2>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[
+            { key: 'KAFKA',  label: 'Apache Kafka' },
+            { key: 'HADOOP', label: 'Apache Hadoop' },
+            { key: 'SPARK',  label: 'Apache Spark' },
+          ].map(({ key, label }) => (
+            <span key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', background: '#f59e0b18', borderRadius: 4, padding: '2px 7px' }}>
+                {key}
+              </span>
+              <span style={{ fontSize: 11, color: '#475569' }}>{label} · JIRA</span>
+            </span>
+          ))}
+        </div>
+      </div>
 
       {/* Charts row */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>

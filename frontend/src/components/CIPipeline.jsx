@@ -60,7 +60,10 @@ export default function CIPipeline({ runs = [] }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#e2e8f0' }}>CI Pipeline Runs</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: '#e2e8f0', margin: 0 }}>
+          CI Pipeline Runs
+          <span style={{ color: '#6366f1' }}> — Open Source CI Pipelines</span>
+        </h2>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {/* Status chips */}
           <div style={{ display: 'flex', gap: 4 }}>

@@ -5,7 +5,8 @@
       "Bash(node --check routes/api.js)",
       "Bash(node --check services/poller.js)",
       "Bash(node server.js)",
-      "Bash(kill %1)"
+      "Bash(kill %1)",
+      "Bash(npm install:*)"
     ]
   }
 }

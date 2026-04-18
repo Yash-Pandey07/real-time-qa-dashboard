@@ -23,6 +23,7 @@
 13. [WebSocket Events Reference](#13-websocket-events)
 14. [Configuration Reference (.env)](#14-configuration-reference)
 15. [Common Issues and Fixes](#15-common-issues-and-fixes)
+16. [Open Source Data — Why These Projects?](#16-open-source-data)
 
 ---
 
@@ -32,13 +33,19 @@ The dashboard is a **live QA intelligence platform** that answers these question
 
 | Question | Where it's answered |
 |----------|-------------------|
-| Are our CI pipelines passing or failing right now? | CI Pipeline + Heat Map sections |
+| What is the overall health of all projects at a glance? | **Overview** — CEO/CTO landing page |
+| Are open source CI pipelines passing or failing right now? | Overview → CI panel · Heat Map · CI Pipeline |
 | Which repos have been failing repeatedly? | Heat Map + Bottleneck detection |
-| How many bugs are open across our Jira projects? | Jira Board section |
-| What percentage of our tests are passing? | Test Results section |
+| What is the status of Apache Kafka, Hadoop, Spark bugs? | Overview → JIRA panel · Jira Board (KAFKA · HADOOP · SPARK) |
+| What percentage of our tests are passing? | Overview → Tests panel · Test Results |
 | What is the single most important thing to fix right now? | Bottlenecks section (AI-ranked) |
 
-**Key principle:** Every number, every status, every chart shows **real live data** — not mocked, not randomised. It updates automatically in the background. Nobody has to click refresh or run a script.
+**Key principle:** Every number, every status, every chart shows **real live data from public open source projects** — not mocked, not randomised. It updates automatically in the background. Nobody has to click refresh or run a script.
+
+**Open source data sources used:**
+- **CI:** GitHub Actions pipelines from `microsoft/vscode`, `facebook/react`, `vercel/next.js`, `nodejs/node` — all public, all running CI 24/7
+- **JIRA:** Apache Software Foundation's public JIRA — `KAFKA` (Apache Kafka), `HADOOP` (Apache Hadoop), `SPARK` (Apache Spark)
+- **Tests:** GitHub Check Runs from the same repos, normalised into Zephyr test cycle format
 
 ---
 
@@ -104,9 +111,10 @@ real time QA dashboard/
 │       └── components/
 │           ├── Header.jsx          ← Logo, live clock, connection indicator
 │           ├── SummaryCards.jsx    ← 4 KPI cards at the top
-│           ├── HeatMap.jsx         ← Pipeline grid (module × last 12 runs)
-│           ├── CIPipeline.jsx      ← Filterable pipeline run table
-│           ├── JiraBoard.jsx       ← Charts + issue table from Jira
+│           ├── OverviewPage.jsx    ← CEO/CTO landing page: CI + JIRA + Tests in one view
+│           ├── HeatMap.jsx         ← Open Source CI Pipelines grid (module × last 15 runs)
+│           ├── CIPipeline.jsx      ← Open Source CI Pipelines — filterable run table
+│           ├── JiraBoard.jsx       ← KAFKA · HADOOP · SPARK (JIRA) — charts + issue table
 │           ├── TestResults.jsx     ← Zephyr-format test cycles + executions
 │           └── Bottlenecks.jsx     ← AI-detected issues with recommendations
 │
@@ -138,7 +146,7 @@ real time QA dashboard/
 - `/repos/{owner}/{repo}/actions/runs` → Pipeline run list (status, branch, commit, duration, actor)
 - `/repos/{owner}/{repo}/commits/{branch}/check-runs` → Individual test check results
 
-**Authentication:** A GitHub Personal Access Token (no scopes required). Without it, GitHub's API rate-limits unauthenticated requests to 60/hour — too low for a dashboard polling every 90 seconds.
+**Authentication:** A GitHub Personal Access Token (no scopes required). Without it, GitHub's API rate-limits unauthenticated requests to 60/hour — too low for a dashboard polling on a schedule.
 
 **Data shape after processing:** Each run becomes a normalised object with fields like `status`, `repoLabel`, `branch`, `commitSha`, `durationSec`, `actor` — consistent regardless of which repo it came from.
 
@@ -195,8 +203,13 @@ When a WebSocket client connects, the server immediately sends them the current 
 All the "knobs" for the system are in one place:
 - Which GitHub repos to track
 - Which Jira projects to query
-- How often to poll each source (GitHub every 90s, Jira every 120s, tests every 90s)
+- How often to poll each source (GitHub every 600s, Jira every 900s, tests every 600s)
 - All credentials (read from `.env`, never hardcoded)
+
+Current poll intervals (set conservatively to reduce Railway egress costs):
+- GitHub CI runs: **600 seconds** (10 min)
+- Jira issues: **900 seconds** (15 min)
+- Test/check-runs: **600 seconds** (10 min)
 
 If you want to add a new repo or change a polling interval, `config.js` is the only file you touch.
 
@@ -225,7 +238,7 @@ Two functions:
 
 **`fetchAllRuns()`**
 - Loops through all 4 repos in parallel (`Promise.allSettled`)
-- For each repo: fetches last 20 workflow runs
+- For each repo: fetches last **15** workflow runs (`runsPerRepo: 15` in `config.js` — reduced from 30 to cut Railway egress costs)
 - Maps raw GitHub API fields to a normalised run object
 - If one repo fails (network error, rate limit), the others still succeed — `allSettled` vs `all`
 - Sorts everything by `startedAt` descending so newest runs appear first
@@ -289,6 +302,11 @@ This is the brain of the frontend. It:
 - Fires REST fetch calls on mount to populate data before the first WebSocket message
 - Renders the navigation bar and conditionally renders the active section component
 - Passes state down to child components as props — components themselves are stateless about data
+- **Default section is `overview`** — the first thing anyone sees is the executive Overview page, not the raw Heat Map
+
+**Navigation order:** Overview → Heat Map → CI Pipeline → Jira Board → Test Results → Bottlenecks
+
+The `onNavigate` function is passed as a prop to `OverviewPage` and `Bottlenecks` so those components can programmatically switch tabs (e.g. clicking "View CI Details" on the Overview page navigates to the Heat Map tab).
 
 ### 6.3 hooks/useWebSocket.js — Auto-Reconnecting WebSocket
 
@@ -314,9 +332,9 @@ Every component follows the same pattern:
 ### How it works end-to-end
 
 ```
-[GitHub API] ←── poll every 90s ──→ [backend poller]
-[Jira API]   ←── poll every 120s ──→ [backend poller]
-[GitHub Checks] ←── poll every 90s → [backend poller]
+[GitHub API] ←── poll every 600s (10 min) ──→ [backend poller]
+[Jira API]   ←── poll every 900s (15 min) ──→ [backend poller]
+[GitHub Checks] ←── poll every 600s (10 min) → [backend poller]
                                             ↓
                                     detectBottlenecks()
                                             ↓
@@ -396,6 +414,27 @@ Bottlenecks are deduplicated (same ID won't appear twice) and sorted: Critical f
 
 ## 9. Each Dashboard Section Explained
 
+### Overview Page (Default Landing — `OverviewPage.jsx`)
+
+This is the **first screen** anyone sees. It was designed for a CEO or CTO who needs a one-glance health check without diving into individual reports.
+
+**What it shows:**
+- A single-line tagline naming all open source projects: *"Apache Kafka · Apache Hadoop · Apache Spark (JIRA) · Open Source CI Pipelines · Zephyr Test Cycles"* — so any viewer immediately knows what data this dashboard uses
+- **3 side-by-side clickable panels:**
+  - **CI Pipelines panel** (labelled "Open Source CI Pipelines") — shows pass rate, total runs, running count, and per-repo status dots with pass rates. Clicking navigates to the Heat Map tab.
+  - **JIRA Board panel** (labelled "Apache Projects — JIRA") — shows open bugs, critical bug count, total issues, and the three project keys with counts: `KAFKA · Apache Kafka · JIRA`, `HADOOP · Apache Hadoop · JIRA`, `SPARK · Apache Spark · JIRA`. Clicking navigates to the Jira Board tab.
+  - **Test Results panel** (labelled "Zephyr Test Cycles") — shows pass rate, test count, cycle count, and each active test cycle with its pass rate. Clicking navigates to the Test Results tab.
+- **Critical/High bottlenecks strip** — if any critical or high severity bottlenecks are detected, they appear as cards at the bottom with severity, module, and metric. Clicking the strip navigates to the Bottlenecks tab.
+- **"All systems healthy" bar** — appears (green) when no bottlenecks are detected, so there's a clear positive signal rather than just emptiness.
+
+**Why this exists:** Before this page, the dashboard opened directly to the Heat Map (a dense grid of CI data). That's useful for engineers but not for a manager who just wants to know "are we OK?". The Overview surfaces the most important numbers from all three data sources simultaneously.
+
+**File:** `frontend/src/components/OverviewPage.jsx`
+
+**Props received from App.jsx:** `ciRuns`, `heatmapData`, `jiraData`, `testData`, `bottlenecks`, `onNavigate`
+
+---
+
 ### Header Bar
 Always visible. Shows:
 - "LIVE" badge (pulses green — animated CSS)
@@ -411,9 +450,11 @@ Always visible below the header.
 - **Test Pass Rate** — `overallPassRate` from the test summary (pass / total × 100)
 - **Bottlenecks** — count of detected issues; shows a red "N critical" badge if any are critical severity
 
-### Heat Map
+### Heat Map (`HeatMap.jsx`) — Open Source CI Pipelines
+Header reads: **"Pipeline Heat Map — Open Source CI Pipelines"** so viewers know immediately they are looking at public open source repository data, not internal pipelines.
+
 A grid where:
-- Each **row** = one repository/module
+- Each **row** = one repository/module (`VS Code`, `React`, `Next.js`, `Node.js`)
 - Each **cell** = one of the last **30** pipeline runs, coloured by status
 - **Rightmost cell** = the most recent run
 - **Hover** on any cell = portal tooltip (rendered at document body level — never clipped by any container) showing workflow name, branch, commit SHA, actor, duration, time ago
@@ -424,17 +465,23 @@ A grid where:
 - **0 failures badge** — always rendered (green) to keep row layout stable when there are no failures
 - **Summary bar** above the grid — total runs, total passed, total failed, overall pass rate, count of improving/degrading repos across all repos
 
-This gives an immediate visual "is this repo healthy or not" without reading any numbers.
+The heatmap grid is computed server-side in `routes/api.js` at `/api/ci/heatmap`. Each row object has the key `module` (the human-readable repo label) and `slots` (array of run objects). The Overview page reads `row.module` and `row.slots[0].status` to show the latest status per repo.
 
-### CI Pipeline
+### CI Pipeline (`CIPipeline.jsx`) — Open Source CI Pipelines
+Header reads: **"CI Pipeline Runs — Open Source CI Pipelines"**.
+
 A filterable table of all pipeline runs. You can filter by:
 - Status chip (All / Success / Failure / Running / Queued / Cancelled)
 - Repo dropdown
 
 Columns: status badge, repo + run number, branch + commit SHA, workflow name + commit message, duration, time ago + actor, external link to GitHub.
 
-### Jira Board
-Two bar charts (status distribution, priority distribution) above a filterable issue table. Filter by issue type and status. Columns: key (linked to Jira), type icon, summary + assignee, status badge, priority dot, updated time.
+### Jira Board (`JiraBoard.jsx`) — KAFKA · HADOOP · SPARK (JIRA)
+Header shows the board title plus three project labels: **`KAFKA` Apache Kafka · JIRA**, **`HADOOP` Apache Hadoop · JIRA**, **`SPARK` Apache Spark · JIRA** — so anyone reading the page immediately knows which open source projects and which tracking tool the data comes from.
+
+Two bar charts (status distribution, priority distribution) above a filterable issue table. Filter by issue type and status. Columns: key (linked to Apache JIRA), type icon, summary + assignee, status badge, priority dot, updated time.
+
+**Why Apache JIRA?** The Apache Software Foundation runs a fully public JIRA instance at `issues.apache.org/jira`. It returns the exact same JSON structure as any enterprise Jira Cloud — same field names, same REST API version (v2), same endpoints. This means when you swap in your company's Jira URL + credentials, **zero frontend code changes are needed**.
 
 ### Test Results
 Two tabs:
@@ -558,11 +605,13 @@ All environment variables in `backend/.env`:
 
 **Polling intervals** (change in `config.js`):
 
-| Source | Default interval | Config key |
-|--------|-----------------|------------|
-| GitHub CI runs | 90 seconds | `poll.githubIntervalSeconds` |
-| Jira issues | 120 seconds | `poll.jiraIntervalSeconds` |
-| Test/check-runs | 90 seconds | `poll.testIntervalSeconds` |
+| Source | Default interval | Why this value |
+|--------|-----------------|----------------|
+| GitHub CI runs | **600 seconds** (10 min) | Reduced to cut Railway egress costs; GitHub Actions data doesn't change faster than this in practice |
+| Jira issues | **900 seconds** (15 min) | Jira issues are updated infrequently; 15 min is fresh enough for a dashboard |
+| Test/check-runs | **600 seconds** (10 min) | Matches CI poll interval — test data comes from the same GitHub API |
+
+> **Note:** Earlier versions used 90s/120s intervals. These were reduced in April 2025 to lower Railway egress bandwidth costs. If you are running this locally with no cost constraints, you can lower them back to 90s in `config.js`.
 
 ---
 
@@ -609,4 +658,52 @@ Backend allows all origins (`origin: true`) to support the Vercel frontend domai
 
 ---
 
-*Last updated: April 2026 — reflects current deployed state with all improvements.*
+---
+
+## 16. Open Source Data — Why These Projects?
+
+A common question from new contributors: *"Why are we tracking VS Code, React, Kafka, etc.? This isn't our company's code."*
+
+### The intent
+
+This dashboard was built as a **real, production-grade QA intelligence platform using entirely public data**. The goal was to prove the architecture works with real CI/CD pipelines, real bug trackers, and real test results — not synthetic mocks.
+
+**Criteria for choosing each source:**
+
+| Requirement | Why it matters |
+|-------------|---------------|
+| Public API, no auth needed (or minimal) | Anyone can clone and run the dashboard immediately without needing credentials |
+| Active 24/7 | CI pipelines need to be running constantly for the dashboard to have live data |
+| Realistic data volume | Enough issues, runs, and tests to exercise every UI component meaningfully |
+| Identical API shape to enterprise tools | When you swap in your own Jira/GitHub, zero code changes needed |
+
+### CI Pipelines — Open Source CI Pipelines label
+
+The four GitHub repos tracked are all major open source projects with continuous integration running around the clock:
+
+| Repo | Why chosen |
+|------|-----------|
+| `microsoft/vscode` | Massive codebase, hundreds of CI jobs per day — guaranteed live data always |
+| `facebook/react` | Frontend-focused CI patterns; different workflow structure from vscode |
+| `vercel/next.js` | Full-stack framework; varied job types and durations |
+| `nodejs/node` | Core infrastructure repo; very active, long-running test suites |
+
+The label **"Open Source CI Pipelines"** appears in the Heat Map header, CI Pipeline header, and Overview panel to make this explicit. It tells viewers: *"This is real CI data from well-known open source projects — not mocked numbers."*
+
+### JIRA Projects — KAFKA · HADOOP · SPARK
+
+| Project key | Project | Why chosen |
+|-------------|---------|-----------|
+| `KAFKA` | Apache Kafka | Highly active; wide mix of bug types, priorities, and components |
+| `HADOOP` | Apache Hadoop | Long-lived project with rich historical issue data |
+| `SPARK` | Apache Spark | Active community; good volume of open and in-progress bugs |
+
+The project key labels (`KAFKA`, `HADOOP`, `SPARK`) with the **JIRA** suffix are shown on the Overview panel and the Jira Board header. This tells viewers not just *what* is being tracked but *where* (the tool — JIRA) and *which specific project*.
+
+### When you connect your own data
+
+None of this changes. You update `config.js` with your own repos and Jira project keys. The `KAFKA`, `HADOOP`, `SPARK` labels on the Overview page are hardcoded in `OverviewPage.jsx` — update those strings to match your own project names when you swap data sources.
+
+---
+
+*Last updated: April 2026 — reflects current deployed state including Overview landing page, Open Source CI Pipelines labels, KAFKA/HADOOP/SPARK JIRA project labels, and updated polling intervals.*

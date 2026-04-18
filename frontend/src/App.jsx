@@ -3,6 +3,7 @@ import { Analytics } from '@vercel/analytics/react';
 import { useWebSocket } from './hooks/useWebSocket.js';
 import Header from './components/Header.jsx';
 import SummaryCards from './components/SummaryCards.jsx';
+import OverviewPage from './components/OverviewPage.jsx';
 import HeatMap from './components/HeatMap.jsx';
 import CIPipeline from './components/CIPipeline.jsx';
 import JiraBoard from './components/JiraBoard.jsx';
@@ -12,6 +13,7 @@ import Bottlenecks from './components/Bottlenecks.jsx';
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const NAV_ITEMS = [
+  { id: 'overview',    label: 'Overview' },
   { id: 'heatmap',     label: 'Heat Map' },
   { id: 'pipeline',    label: 'CI Pipeline' },
   { id: 'jira',        label: 'Jira Board' },
@@ -21,7 +23,7 @@ const NAV_ITEMS = [
 
 export default function App() {
   const [connected, setConnected]           = useState(false);
-  const [activeSection, setActiveSection]   = useState('heatmap');
+  const [activeSection, setActiveSection]   = useState('overview');
   const [lastUpdated, setLastUpdated]       = useState(null);
   const [ciRuns, setCiRuns]                 = useState([]);
   const [heatmapData, setHeatmapData]       = useState([]);
@@ -47,8 +49,7 @@ export default function App() {
     onMessage,
   });
 
-  // Bootstrap via REST on mount
-  useEffect(() => {
+  const fetchAllData = useCallback(() => {
     fetch(`${API_BASE}/api/ci/runs?limit=100`).then(r => r.json()).then(d => { if (d.runs) setCiRuns(d.runs); }).catch(() => {});
     fetch(`${API_BASE}/api/ci/heatmap`).then(r => r.json()).then(d => { if (d.grid) setHeatmapData(d.grid); }).catch(() => {});
     fetch(`${API_BASE}/api/jira/issues?limit=50`).then(r => r.json()).then(d => {
@@ -66,7 +67,11 @@ export default function App() {
     fetch(`${API_BASE}/api/bottlenecks`).then(r => r.json()).then(d => {
       if (d.bottlenecks) setBottlenecks(d.bottlenecks);
     }).catch(() => {});
+    setLastUpdated(new Date().toISOString());
   }, []);
+
+  // Bootstrap via REST on mount
+  useEffect(() => { fetchAllData(); }, [fetchAllData]);
 
   // Keep heatmap in sync when ciRuns update
   useEffect(() => {
@@ -74,7 +79,9 @@ export default function App() {
   }, [ciRuns]);
 
   const handleRefresh = () => {
-    fetch(`${API_BASE}/api/refresh`, { method: 'POST' }).catch(() => {});
+    fetch(`${API_BASE}/api/refresh`, { method: 'POST' })
+      .then(() => fetchAllData())
+      .catch(() => fetchAllData());
   };
 
   const ciPassRate = (() => {
@@ -129,6 +136,7 @@ export default function App() {
       </div>
 
       <div style={{ padding: '24px' }}>
+        {activeSection === 'overview'    && <OverviewPage ciRuns={ciRuns} heatmapData={heatmapData} jiraData={jiraData} testData={testData} bottlenecks={bottlenecks} onNavigate={setActiveSection} />}
         {activeSection === 'heatmap'     && <HeatMap grid={heatmapData} />}
         {activeSection === 'pipeline'    && <CIPipeline runs={ciRuns} />}
         {activeSection === 'jira'        && <JiraBoard jiraData={jiraData} />}

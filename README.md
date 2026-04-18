@@ -12,6 +12,7 @@ A live QA intelligence platform that aggregates CI/CD pipeline status, Jira bug 
 
 | Question | Where it's answered |
 |----------|-------------------|
+| What is the overall project health at a glance? | **Overview** (CEO/CTO landing page) |
 | Are CI pipelines passing or failing right now? | Heat Map + CI Pipeline section |
 | Which repos have been failing repeatedly? | Heat Map + Bottleneck detection |
 | How many bugs are open across Jira projects? | Jira Board section |
@@ -62,9 +63,10 @@ real-time-qa-dashboard/
 │       └── components/
 │           ├── Header.jsx        # Live clock, connection status, refresh
 │           ├── SummaryCards.jsx  # 4 KPI cards
-│           ├── HeatMap.jsx       # Pipeline grid — last 30 runs per repo
-│           ├── CIPipeline.jsx    # Filterable pipeline run table
-│           ├── JiraBoard.jsx     # Charts + issue table
+│           ├── OverviewPage.jsx  # CEO/CTO landing — CI + JIRA + Tests in one view
+│           ├── HeatMap.jsx       # Pipeline grid — last 30 runs per repo (Open Source CI Pipelines)
+│           ├── CIPipeline.jsx    # Filterable pipeline run table (Open Source CI Pipelines)
+│           ├── JiraBoard.jsx     # Charts + issue table — KAFKA, HADOOP, SPARK (JIRA)
 │           ├── TestResults.jsx   # Zephyr-format cycles + executions
 │           └── Bottlenecks.jsx   # AI-detected issues with source navigation
 ├── .env.example
@@ -152,6 +154,9 @@ All sources are **public APIs** — the dashboard works out of the box with just
 
 ## Dashboard Sections
 
+### 🏠 Overview (Landing Page)
+Executive-level summary for CEO/CTO. Shows all three data sources — Open Source CI Pipelines, Apache Kafka/Hadoop/Spark JIRA projects, and Zephyr test cycles — on a single screen as clickable panels. Each panel navigates to the full detail tab. Critical bottlenecks are surfaced at the bottom.
+
 ### 🔥 Heat Map
 - Last **30 runs** per repository, colour-coded by status
 - **Trend indicator** per repo: ↑ Improving / → Stable / ↓ Degrading (compares last 10 vs previous 10 runs)
@@ -163,8 +168,8 @@ All sources are **public APIs** — the dashboard works out of the box with just
 ### ⚙️ CI Pipeline
 Filterable table of all runs. Filter by status and repo. Columns: status, repo, branch, commit, workflow, duration, actor, GitHub link.
 
-### 🐛 Jira Board
-Bar charts (status + priority distribution) above a filterable issue table.
+### 🐛 Jira Board — KAFKA · HADOOP · SPARK (JIRA)
+Tracks Apache Kafka, Apache Hadoop, and Apache Spark open source projects via Apache's public JIRA. Bar charts (status + priority distribution) above a filterable issue table. Project keys (KAFKA, HADOOP, SPARK) are displayed as labels on every view.
 
 ### ✅ Test Results
 Zephyr-format test cycles with donut charts, stat chips, and individual execution list.
