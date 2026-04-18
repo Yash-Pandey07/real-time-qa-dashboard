@@ -9,6 +9,7 @@ import CIPipeline from './components/CIPipeline.jsx';
 import JiraBoard from './components/JiraBoard.jsx';
 import TestResults from './components/TestResults.jsx';
 import Bottlenecks from './components/Bottlenecks.jsx';
+import SelfHealingPipeline from './components/SelfHealingPipeline.jsx';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -18,7 +19,8 @@ const NAV_ITEMS = [
   { id: 'pipeline',    label: 'CI Pipeline' },
   { id: 'jira',        label: 'Jira Board' },
   { id: 'tests',       label: 'Test Results' },
-  { id: 'bottlenecks', label: 'Bottlenecks' },
+  { id: 'bottlenecks',  label: 'Bottlenecks' },
+  { id: 'selfhealing', label: '⚡ Self-Healing' },
 ];
 
 export default function App() {
@@ -30,6 +32,7 @@ export default function App() {
   const [jiraData, setJiraData]             = useState({ allIssues: [], metrics: {}, projects: [] });
   const [testData, setTestData]             = useState({ testCycles: [], testExecutions: [], summary: {} });
   const [bottlenecks, setBottlenecks]       = useState([]);
+  const [selfHealingData, setSelfHealingData] = useState(null);
 
   const onMessage = useCallback((type, payload) => {
     if (type === 'ci:update') {
@@ -41,6 +44,8 @@ export default function App() {
       setTestData({ testCycles: payload.testCycles || [], testExecutions: payload.testExecutions || [], summary: payload.summary || {} });
     } else if (type === 'bottlenecks:update') {
       setBottlenecks(payload.bottlenecks || []);
+    } else if (type === 'selfhealing:update') {
+      setSelfHealingData(payload);
     }
   }, []);
 
@@ -73,10 +78,6 @@ export default function App() {
   // Bootstrap via REST on mount
   useEffect(() => { fetchAllData(); }, [fetchAllData]);
 
-  // Keep heatmap in sync when ciRuns update
-  useEffect(() => {
-    fetch(`${API_BASE}/api/ci/heatmap`).then(r => r.json()).then(d => { if (d.grid) setHeatmapData(d.grid); }).catch(() => {});
-  }, [ciRuns]);
 
   const handleRefresh = () => {
     fetch(`${API_BASE}/api/refresh`, { method: 'POST' })
@@ -136,12 +137,13 @@ export default function App() {
       </div>
 
       <div style={{ padding: '24px' }}>
-        {activeSection === 'overview'    && <OverviewPage ciRuns={ciRuns} heatmapData={heatmapData} jiraData={jiraData} testData={testData} bottlenecks={bottlenecks} onNavigate={setActiveSection} />}
+        {activeSection === 'overview'    && <OverviewPage ciRuns={ciRuns} heatmapData={heatmapData} jiraData={jiraData} testData={testData} bottlenecks={bottlenecks} selfHealingData={selfHealingData} onNavigate={setActiveSection} />}
         {activeSection === 'heatmap'     && <HeatMap grid={heatmapData} />}
         {activeSection === 'pipeline'    && <CIPipeline runs={ciRuns} />}
         {activeSection === 'jira'        && <JiraBoard jiraData={jiraData} />}
         {activeSection === 'tests'       && <TestResults testData={testData} />}
-        {activeSection === 'bottlenecks' && <Bottlenecks bottlenecks={bottlenecks} onNavigate={setActiveSection} />}
+        {activeSection === 'bottlenecks'  && <Bottlenecks bottlenecks={bottlenecks} onNavigate={setActiveSection} />}
+        {activeSection === 'selfhealing'  && <SelfHealingPipeline data={selfHealingData} />}
       </div>
       <Analytics />
     </div>

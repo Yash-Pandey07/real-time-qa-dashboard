@@ -1,12 +1,14 @@
 const config = require('../config');
 const { fetchAllRuns, fetchAllTestData } = require('../adapters/github');
 const { fetchAllJiraData }              = require('../adapters/jira');
+const { fetchSelfHealingData }          = require('../adapters/selfhealing');
 const { detectBottlenecks }             = require('./bottleneck');
 
 const state = {
   ciRuns: [], jiraData: { projects: [], allIssues: [], metrics: {}, fetchedAt: null },
   testData: { testCycles: [], testExecutions: [], summary: {}, fetchedAt: null },
-  bottlenecks: [], lastPollAt: { ci: null, jira: null, tests: null },
+  bottlenecks: [], selfHealing: null,
+  lastPollAt: { ci: null, jira: null, tests: null, selfHealing: null },
 };
 
 let broadcast = () => {};
@@ -46,16 +48,40 @@ function refreshBottlenecks() {
   broadcast('bottlenecks:update', { bottlenecks: state.bottlenecks, detectedAt: new Date().toISOString() });
 }
 
+async function pollSelfHealing() {
+  try {
+    const data = await fetchSelfHealingData();
+    state.selfHealing = data; state.lastPollAt.selfHealing = new Date().toISOString();
+    broadcast('selfhealing:update', { ...data, fetchedAt: state.lastPollAt.selfHealing });
+    const total = data.repos.reduce((s, r) => s + r.runs.length, 0);
+    console.log(`[Poller] SelfHealing: ${data.repos.length} repos, ${total} total runs.`);
+  } catch (err) { console.error('[Poller] SelfHealing poll failed:', err.message); }
+}
+
 function start(broadcastFn) {
   broadcast = broadcastFn;
   pollCI();
-  setTimeout(pollJira,  4000);
-  setTimeout(pollTests, 8000);
-  setInterval(pollCI,    config.poll.githubIntervalSeconds * 1000);
-  setInterval(pollJira,  config.poll.jiraIntervalSeconds   * 1000);
-  setInterval(pollTests, config.poll.testIntervalSeconds   * 1000);
+  setTimeout(pollJira,        4000);
+  setTimeout(pollTests,       8000);
+  setTimeout(pollSelfHealing, 12000);
+  setInterval(pollCI,           config.poll.githubIntervalSeconds      * 1000);
+  setInterval(pollJira,         config.poll.jiraIntervalSeconds         * 1000);
+  setInterval(pollTests,        config.poll.testIntervalSeconds         * 1000);
+  setInterval(pollSelfHealing,  config.poll.selfHealingIntervalSeconds  * 1000);
   console.log(`[Poller] Started.`);
 }
 
 function getState() { return state; }
-module.exports = { start, getState };
+
+async function pollSelfHealingNow() {
+  const cache = require('./cache');
+  config.selfHealing.repos.forEach(r => {
+    cache.del(`sh:dashboard:${r.owner}/${r.repo}`);
+    cache.del(`sh:runs:${r.owner}/${r.repo}`);
+    cache.del(`sh:workflows:${r.owner}/${r.repo}`);
+    cache.del(`sh:cisummary:${r.owner}/${r.repo}`);
+  });
+  await pollSelfHealing();
+}
+
+module.exports = { start, getState, pollSelfHealingNow };

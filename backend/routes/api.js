@@ -71,7 +71,7 @@ router.get('/jira/issues', (req, res) => {
   const { projectKey, type, status, priority, limit = 50 } = req.query;
   const { allIssues, metrics, fetchedAt } = poller.getState().jiraData;
   let issues = allIssues || [];
-  if (projectKey) issues = issues.filter(i => i.key?.startsWith(projectKey));
+  if (projectKey) issues = issues.filter(i => i.key?.startsWith(projectKey + '-'));
   if (type)       issues = issues.filter(i => i.fields?.issuetype?.name === type);
   if (status)     issues = issues.filter(i => i.fields?.status?.name    === status);
   if (priority)   issues = issues.filter(i => i.fields?.priority?.name  === priority);

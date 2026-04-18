@@ -16,6 +16,7 @@ function lastUpdated(key) {
   return entry ? entry.cachedAt : null;
 }
 
+function del(key) { store.delete(key); }
 function flush() { store.clear(); }
 
-module.exports = { get, set, lastUpdated, flush };
+module.exports = { get, set, del, lastUpdated, flush };

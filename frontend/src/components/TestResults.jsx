@@ -109,7 +109,7 @@ function CycleCard({ cycle }) {
         }}
       >
         {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        {expanded ? 'Hide raw Zephyr data' : 'Show raw Zephyr data'}
+        {expanded ? 'Hide technical details' : 'Technical details'}
       </button>
       {expanded && (
         <pre style={{

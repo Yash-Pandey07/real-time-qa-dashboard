@@ -1,12 +1,19 @@
 import { useEffect, useRef, useCallback } from 'react';
 
-const WS_URL = import.meta.env.VITE_WS_URL || `ws://${window.location.hostname}:3001/ws`;
+function buildWsUrl() {
+  if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const port  = window.location.port ? `:${window.location.port}` : '';
+  return `${proto}//${window.location.hostname}${port}/ws`;
+}
+
+const WS_URL = buildWsUrl();
 
 export function useWebSocket(handlers) {
-  const wsRef = useRef(null);
+  const wsRef       = useRef(null);
   const handlersRef = useRef(handlers);
-  const retryRef = useRef(0);
-  const timerRef = useRef(null);
+  const retryRef    = useRef(0);
+  const timerRef    = useRef(null);
 
   useEffect(() => { handlersRef.current = handlers; }, [handlers]);
 

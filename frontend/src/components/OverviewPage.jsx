@@ -1,5 +1,5 @@
 import React from 'react';
-import { GitBranch, Bug, TestTube, AlertTriangle, ChevronRight, Zap } from 'lucide-react';
+import { GitBranch, Bug, TestTube, AlertTriangle, ChevronRight, Zap, Shield, TrendingUp, CheckCircle, XCircle } from 'lucide-react';
 
 const STATUS_COLORS = {
   success: '#22c55e', failure: '#ef4444', running: '#60a5fa',
@@ -76,14 +76,9 @@ function Panel({ accent, icon, title, badge, metrics, children, footer, onClick 
   );
 }
 
-const JIRA_PROJECTS = [
-  { key: 'KAFKA', label: 'Apache Kafka' },
-  { key: 'HADOOP', label: 'Apache Hadoop' },
-  { key: 'SPARK', label: 'Apache Spark' },
-];
 
-export default function OverviewPage({ ciRuns, heatmapData, jiraData, testData, bottlenecks, onNavigate }) {
-  const { allIssues = [], metrics = {} } = jiraData;
+export default function OverviewPage({ ciRuns, heatmapData, jiraData, testData, bottlenecks, selfHealingData, onNavigate }) {
+  const { allIssues = [], metrics = {}, projects: jiraProjects = [] } = jiraData;
 
   // CI metrics
   const recent = ciRuns.slice(0, 40);
@@ -103,8 +98,8 @@ export default function OverviewPage({ ciRuns, heatmapData, jiraData, testData, 
 
   // Test metrics
   const testPassRate = testData.summary?.overallPassRate ?? 0;
-  const totalTests = testData.summary?.total ?? 0;
-  const totalCycles = testData.testCycles?.length ?? 0;
+  const totalTests   = testData.summary?.totalExecutions ?? 0;
+  const totalCycles  = testData.testCycles?.length ?? 0;
 
   // Bottlenecks
   const criticalBns = bottlenecks.filter(b => b.severity === 'critical').slice(0, 3);
@@ -128,7 +123,7 @@ export default function OverviewPage({ ciRuns, heatmapData, jiraData, testData, 
       </div>
 
       {/* 3-column panels */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 20 }}>
 
         {/* CI Panel */}
         <Panel
@@ -195,7 +190,7 @@ export default function OverviewPage({ ciRuns, heatmapData, jiraData, testData, 
         >
           <p style={{ color: '#475569', fontSize: 11, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>Projects</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            {JIRA_PROJECTS.map(({ key, label }) => {
+            {jiraProjects.map(({ key, label }) => {
               const count = allIssues.filter(i => i.key?.startsWith(key + '-')).length;
               return (
                 <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -240,7 +235,7 @@ export default function OverviewPage({ ciRuns, heatmapData, jiraData, testData, 
             {testData.testCycles?.length === 0 || !testData.testCycles ? (
               <span style={{ color: '#475569', fontSize: 12 }}>No active cycles</span>
             ) : testData.testCycles.slice(0, 5).map(cycle => {
-              const passRate = cycle.summary?.passRate ?? 0;
+              const passRate = cycle.passRate ?? cycle.summary?.passRate ?? 0;
               return (
                 <div key={cycle.id || cycle.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ color: '#94a3b8', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '75%' }}>
@@ -312,6 +307,63 @@ export default function OverviewPage({ ciRuns, heatmapData, jiraData, testData, 
           <span style={{ color: '#22c55e', fontSize: 13, fontWeight: 500 }}>No bottlenecks detected — all systems healthy</span>
         </div>
       )}
+
+      {/* Self-Healing Pipeline Panel */}
+      {selfHealingData?.repos?.length > 0 && (() => {
+        const riyaRepo = selfHealingData.repos.find(r => r.dashboardData);
+        const latest   = riyaRepo?.dashboardData?.latest;
+        const history  = riyaRepo?.dashboardData?.history || [];
+        const s        = latest?.stats || {};
+        const wf       = latest?.workflow || {};
+        const passed   = (s.totalTestsCompleted || 0) - (s.totalFailures || 0);
+        const healRate = parseFloat(s.healSuccessRate || 0);
+        const allTimeTests = history.reduce((a, r) => a + (r.totalTestsCompleted || 0), 0);
+        const allTimeHeals = history.reduce((a, r) => a + (r.totalSelectorHeals || 0) + (r.totalFlowHeals || 0), 0);
+
+        return (
+          <Panel
+            accent="#f59e0b"
+            icon={<Zap size={16} color="#f59e0b" />}
+            title="Self-Healing Pipeline"
+            badge={riyaRepo ? `${riyaRepo.label} · Run #${wf.runNumber || '—'}` : 'Self-Healing CI'}
+            metrics={
+              <>
+                <MetricBlock label="Tests Run"   value={s.totalTestsCompleted ?? '—'} />
+                <MetricBlock label="Passed"      value={passed}                        color="#22c55e" />
+                {(s.totalFailures || 0) > 0 && <MetricBlock label="Failed" value={s.totalFailures} color="#ef4444" />}
+                <MetricBlock label="Heal Rate"   value={latest ? `${healRate}%` : '—'} color={healRate >= 50 ? '#22c55e' : '#f59e0b'} />
+              </>
+            }
+            footer="View Self-Healing Details"
+            onClick={() => onNavigate('selfhealing')}
+          >
+            <p style={{ color: '#475569', fontSize: 11, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>All-time ({history.length} runs)</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <TestTube size={11} color="#60a5fa" />
+                  <span style={{ color: '#94a3b8', fontSize: 12 }}>Total tests run</span>
+                </div>
+                <span style={{ color: '#60a5fa', fontSize: 11, fontWeight: 600 }}>{allTimeTests}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Shield size={11} color="#a78bfa" />
+                  <span style={{ color: '#94a3b8', fontSize: 12 }}>Total heals (selector + flow)</span>
+                </div>
+                <span style={{ color: '#a78bfa', fontSize: 11, fontWeight: 600 }}>{allTimeHeals}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <TrendingUp size={11} color={healRate >= 50 ? '#22c55e' : '#f59e0b'} />
+                  <span style={{ color: '#94a3b8', fontSize: 12 }}>Latest heal success rate</span>
+                </div>
+                <span style={{ color: healRate >= 50 ? '#22c55e' : '#f59e0b', fontSize: 11, fontWeight: 600 }}>{healRate}%</span>
+              </div>
+            </div>
+          </Panel>
+        );
+      })()}
     </div>
   );
 }

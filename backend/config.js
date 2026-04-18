@@ -32,9 +32,15 @@ module.exports = {
     apiToken:   process.env.ZEPHYR_API_TOKEN || '',
     projectKey: process.env.ZEPHYR_PROJECT   || '',
   },
+  selfHealing: {
+    repos: [
+      { owner: 'riyabhatia45', repo: 'QAi', label: "Riya's QAi", hasCiSummary: true, hasDashboardData: true },
+    ],
+  },
   poll: {
-    githubIntervalSeconds: 600,   // 10 min (was 90s)
-    jiraIntervalSeconds:   900,   // 15 min (was 2 min)
-    testIntervalSeconds:   600,   // 10 min (was 90s)
+    githubIntervalSeconds:      600,   // 10 min (was 90s for testing)
+    jiraIntervalSeconds:        900,   // 15 min (was 2 min for testing)
+    testIntervalSeconds:        600,   // 10 min (was 90s for testing)
+    selfHealingIntervalSeconds: 60,    // 1 min — cheap raw.githubusercontent.com fetch, shows live CI status
   },
 };
