@@ -311,56 +311,71 @@ export default function OverviewPage({ ciRuns, heatmapData, jiraData, testData, 
       {/* Self-Healing Pipeline Panel */}
       <div style={{ marginTop: 20 }}>
       {selfHealingData?.repos?.length > 0 && (() => {
-        const riyaRepo = selfHealingData.repos.find(r => r.dashboardData);
-        const latest   = riyaRepo?.dashboardData?.latest;
-        const history  = riyaRepo?.dashboardData?.history || [];
-        const s        = latest?.stats || {};
-        const wf       = latest?.workflow || {};
-        const passed   = (s.totalTestsCompleted || 0) - (s.totalFailures || 0);
-        const healRate = parseFloat(s.healSuccessRate || 0);
-        const allTimeTests = history.reduce((a, r) => a + (r.totalTestsCompleted || 0), 0);
-        const allTimeHeals = history.reduce((a, r) => a + (r.totalSelectorHeals || 0) + (r.totalFlowHeals || 0), 0);
+        const healingRepos = selfHealingData.repos.filter(r => r.dashboardData || r.ciSummary);
+        if (!healingRepos.length) return null;
+
+        // Aggregate across all repos for top-level metrics
+        const totalTests = healingRepos.reduce((a, r) => {
+          const s = r.dashboardData?.latest?.stats || {};
+          return a + (s.totalTestsCompleted || 0);
+        }, 0);
+        const totalHeals = healingRepos.reduce((a, r) => {
+          const s = r.dashboardData?.latest?.stats || {};
+          return a + (s.totalSelectorHeals || 0) + (s.totalFlowHeals || 0);
+        }, 0);
+        const totalFailures = healingRepos.reduce((a, r) => {
+          const s = r.dashboardData?.latest?.stats || {};
+          return a + (s.totalFailures || 0);
+        }, 0);
 
         return (
           <Panel
             accent="#f59e0b"
             icon={<Zap size={16} color="#f59e0b" />}
             title="Self-Healing Pipeline"
-            badge={riyaRepo ? `${riyaRepo.label} · Run #${wf.runNumber || '—'}` : 'Self-Healing CI'}
+            badge={`${healingRepos.length} project${healingRepos.length !== 1 ? 's' : ''} tracked`}
             metrics={
               <>
-                <MetricBlock label="Tests Run"   value={s.totalTestsCompleted ?? '—'} />
-                <MetricBlock label="Passed"      value={passed}                        color="#22c55e" />
-                {(s.totalFailures || 0) > 0 && <MetricBlock label="Failed" value={s.totalFailures} color="#ef4444" />}
-                <MetricBlock label="Heal Rate"   value={latest ? `${healRate}%` : '—'} color={healRate >= 50 ? '#22c55e' : '#f59e0b'} />
+                <MetricBlock label="Tests Run"  value={totalTests || '—'} />
+                <MetricBlock label="Total Heals" value={totalHeals || '—'} color="#a78bfa" />
+                {totalFailures > 0 && <MetricBlock label="Failures" value={totalFailures} color="#ef4444" />}
               </>
             }
             footer="View Self-Healing Details"
             onClick={() => onNavigate('selfhealing')}
           >
-            <p style={{ color: '#475569', fontSize: 11, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>All-time ({history.length} runs)</p>
+            <p style={{ color: '#475569', fontSize: 11, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>Projects</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <TestTube size={11} color="#60a5fa" />
-                  <span style={{ color: '#94a3b8', fontSize: 12 }}>Total tests run</span>
-                </div>
-                <span style={{ color: '#60a5fa', fontSize: 11, fontWeight: 600 }}>{allTimeTests}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Shield size={11} color="#a78bfa" />
-                  <span style={{ color: '#94a3b8', fontSize: 12 }}>Total heals (selector + flow)</span>
-                </div>
-                <span style={{ color: '#a78bfa', fontSize: 11, fontWeight: 600 }}>{allTimeHeals}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <TrendingUp size={11} color={healRate >= 50 ? '#22c55e' : '#f59e0b'} />
-                  <span style={{ color: '#94a3b8', fontSize: 12 }}>Latest heal success rate</span>
-                </div>
-                <span style={{ color: healRate >= 50 ? '#22c55e' : '#f59e0b', fontSize: 11, fontWeight: 600 }}>{healRate}%</span>
-              </div>
+              {healingRepos.map((r, i) => {
+                const s        = r.dashboardData?.latest?.stats || {};
+                const wf       = r.dashboardData?.latest?.workflow || {};
+                const healRate = parseFloat(s.healSuccessRate || r.ciSummary?.healRate || 0);
+                const hasRunning = r.runs?.some(run => run.status === 'running');
+                return (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{
+                        width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                        background: hasRunning ? '#60a5fa' : healRate >= 50 ? '#22c55e' : '#f59e0b',
+                        ...(hasRunning ? { animation: 'pulse 1.4s infinite' } : {}),
+                      }} />
+                      <span style={{ color: '#94a3b8', fontSize: 12 }}>{r.label}</span>
+                      {wf.runNumber && <span style={{ color: '#475569', fontSize: 11 }}>#{wf.runNumber}</span>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {s.totalTestsCompleted != null && (
+                        <span style={{ color: '#60a5fa', fontSize: 11 }}>{s.totalTestsCompleted} tests</span>
+                      )}
+                      <span style={{
+                        color: healRate >= 50 ? '#22c55e' : '#f59e0b',
+                        fontSize: 11, fontWeight: 600,
+                      }}>
+                        {r.dashboardData ? `${healRate}%` : '—'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </Panel>
         );
