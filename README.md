@@ -1,10 +1,11 @@
-# Real-Time QA Intelligence Dashboard
+# QA Intelligence Dashboard
 
-A live QA intelligence platform that aggregates CI/CD pipeline status, Jira bug tracking, and test results into a single real-time dashboard — with AI-powered bottleneck detection.
+A live QA intelligence platform that aggregates CI/CD pipeline status, Jira bug tracking, test results, and self-healing automation metrics into a single real-time dashboard — with auto-detected bottleneck analysis.
 
+![CI](https://github.com/Yash-Pandey07/real-time-qa-dashboard/actions/workflows/ci.yml/badge.svg)
 ![Stack](https://img.shields.io/badge/Backend-Node.js%20%2B%20Express-green) ![Stack](https://img.shields.io/badge/Frontend-React%2018%20%2B%20Vite-blue) ![Stack](https://img.shields.io/badge/Realtime-WebSockets-orange) ![Stack](https://img.shields.io/badge/Deployed-Railway%20%2B%20Vercel-purple)
 
-**Live:** [project-p0adc.vercel.app](https://project-p0adc.vercel.app)        
+**Live:** [project-p0adc.vercel.app](https://project-p0adc.vercel.app)
 
 ---
 
@@ -17,7 +18,8 @@ A live QA intelligence platform that aggregates CI/CD pipeline status, Jira bug 
 | Which repos have been failing repeatedly? | Heat Map + Bottleneck detection |
 | How many bugs are open across Jira projects? | Jira Board section |
 | What percentage of tests are passing? | Test Results section |
-| What is the single most important thing to fix? | Bottlenecks section (AI-ranked) |
+| What is the single most important thing to fix? | Bottlenecks section (auto-detected, severity-ranked) |
+| How is our self-healing automation performing? | Self-Healing Pipeline section |
 
 Every number updates automatically via WebSockets — no refresh needed.
 
@@ -48,27 +50,32 @@ real-time-qa-dashboard/
 │   ├── config.js           # Repos, Jira projects, polling intervals
 │   ├── adapters/
 │   │   ├── github.js       # GitHub Actions + check-runs fetcher
-│   │   └── jira.js         # Jira REST API v2 fetcher
+│   │   ├── jira.js         # Jira REST API v2 fetcher
+│   │   └── selfhealing.js  # Self-healing CI + dashboard-data branch fetcher
 │   ├── services/
-│   │   ├── cache.js        # In-memory TTL cache
-│   │   ├── poller.js       # Scheduler — polls APIs and broadcasts
-│   │   └── bottleneck.js   # AI bottleneck detection (8 rules)
+│   │   ├── cache.js        # In-memory TTL cache (with del support)
+│   │   ├── poller.js       # Scheduler — polls APIs, broadcasts via WebSocket
+│   │   └── bottleneck.js   # Rule-based bottleneck detection (8 rules)
 │   └── routes/
 │       └── api.js          # REST endpoints
 ├── frontend/
 │   └── src/
 │       ├── App.jsx         # Root — state, WebSocket wiring, nav
 │       ├── hooks/
-│       │   └── useWebSocket.js  # Auto-reconnecting WebSocket hook
+│       │   └── useWebSocket.js      # Auto-reconnecting WebSocket (wss:// aware)
 │       └── components/
-│           ├── Header.jsx        # Live clock, connection status, refresh
-│           ├── SummaryCards.jsx  # 4 KPI cards
-│           ├── OverviewPage.jsx  # CEO/CTO landing — CI + JIRA + Tests in one view
-│           ├── HeatMap.jsx       # Pipeline grid — last 30 runs per repo (Open Source CI Pipelines)
-│           ├── CIPipeline.jsx    # Filterable pipeline run table (Open Source CI Pipelines)
-│           ├── JiraBoard.jsx     # Charts + issue table — KAFKA, HADOOP, SPARK (JIRA)
-│           ├── TestResults.jsx   # Zephyr-format cycles + executions
-│           └── Bottlenecks.jsx   # AI-detected issues with source navigation
+│           ├── Header.jsx           # Live clock, LIVE/RECONNECTING badge, refresh
+│           ├── SummaryCards.jsx     # 4 KPI cards
+│           ├── OverviewPage.jsx     # CEO/CTO landing — CI + JIRA + Tests + Self-Healing
+│           ├── HeatMap.jsx          # Pipeline grid — last 30 runs per repo
+│           ├── CIPipeline.jsx       # Filterable pipeline run table
+│           ├── JiraBoard.jsx        # Charts + issue table — KAFKA, HADOOP, SPARK (JIRA)
+│           ├── TestResults.jsx      # Zephyr-format cycles + executions
+│           ├── Bottlenecks.jsx      # Auto-detected issues with source navigation
+│           └── SelfHealingPipeline.jsx  # Self-healing metrics, test breakdown, run history
+├── .github/
+│   └── workflows/
+│       └── ci.yml          # GitHub Actions — syntax check + build on every push/PR
 ├── .env.example
 └── start.bat               # Windows one-click launcher
 ```
@@ -144,9 +151,10 @@ VITE_WS_URL=wss://real-time-qa-dashboard-production.up.railway.app/ws
 
 | Source | What it provides |
 |--------|----------------|
-| GitHub Actions (microsoft/vscode, facebook/react, vercel/next.js, nodejs/node) | Live CI pipeline runs — last 30 per repo |
-| Apache Jira — KAFKA, HADOOP, SPARK projects (public) | Real bug/issue data |
+| GitHub Actions (`microsoft/vscode`, `facebook/react`, `vercel/next.js`, `nodejs/node`) | Live CI pipeline runs — last 15 per repo, polled every 10 min |
+| Apache Jira — KAFKA, HADOOP, SPARK (public) | Real bug/issue data, polled every 15 min |
 | GitHub Check Runs (normalised to Zephyr format) | Test execution results |
+| `riyabhatia45/QAi` — `dashboard-data` branch | Self-healing automation metrics, per-test breakdown, full run history — polled every 60s |
 
 All sources are **public APIs** — the dashboard works out of the box with just a GitHub token.
 
@@ -174,8 +182,18 @@ Tracks Apache Kafka, Apache Hadoop, and Apache Spark open source projects via Ap
 ### ✅ Test Results
 Zephyr-format test cycles with donut charts, stat chips, and individual execution list.
 
+### ⚡ Self-Healing Pipeline
+Live view of the team's Playwright self-healing automation (`riyabhatia45/QAi`):
+- **Latest Run Metrics** — Tests run, Passed, Failed, Selector Heals, Flow Recoveries, Time Saved, Heal Rate
+- **All-Time Totals** — aggregated across all stored runs
+- **Test Case Breakdown** — per-test table with search, pass/fail filter, steps, heals, duration
+- **Run History** — all historical runs with filters (Healthy / Had Failures) and sort (Date / Heal Rate / Failures)
+- **30-day Activity Chart** — full-width bar chart, one bar per day
+- Updates within **~7 seconds** of a CI run completing (via GitHub webhook) or within **60 seconds** via polling
+- Also shown as a summary panel on the Overview page
+
 ### 🤖 Bottlenecks
-AI-detected issues with:
+Auto-detected issues with:
 - Severity ranking (Critical → High → Medium → Low)
 - **Source badge** showing which system the issue came from (GitHub Actions / Jira / Zephyr) — **clickable, navigates directly to that section**
 - Detection timestamp
@@ -199,9 +217,9 @@ Edit the `repos` array in `backend/config.js`.
 
 ---
 
-## AI Bottleneck Detection
+## Bottleneck Detection
 
-The bottleneck engine analyses live data across all three sources after every poll cycle:
+The bottleneck engine analyses live data across all sources after every poll cycle (rule-based, not ML):
 
 | Rule | Triggers when | Severity |
 |------|--------------|----------|
@@ -233,15 +251,24 @@ Local: `http://localhost:3001`
 | `GET /api/tests/executions` | Test executions |
 | `GET /api/bottlenecks` | Detected bottlenecks |
 | `POST /api/refresh` | Force re-fetch (flush cache) |
+| `POST /webhooks/github` | GitHub webhook — triggers instant self-healing refresh on CI completion |
 
 ---
+
+## CI / Quality Gate
+
+GitHub Actions runs on every push and pull request to `main`:
+- **Backend job** — `node --check` on all key files + module load verification
+- **Frontend job** — full Vite production build
+
+Both jobs must pass before a PR can be merged. Badge at the top of this README shows current status.
 
 ## Roadmap
 
 - [ ] Supabase integration — persist CI runs, bottlenecks, and incidents across restarts
-- [ ] Incidents tab — real-time view of self-healing script outcomes
+- [ ] Self-healing trend charts — heal rate over time, per-test history
 - [ ] Auto-rerun — detect consecutive failures and trigger GitHub Actions re-run automatically
-- [ ] Your own GitHub Actions repo — report CI failures directly to the dashboard
+- [ ] Connect your own GitHub repos and Jira projects
 
 ---
 

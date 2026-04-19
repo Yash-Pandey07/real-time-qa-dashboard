@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Backend ──────────────────────────────────────────────────────────────────
+  backend:
+    name: Backend — Lint & Syntax
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Check syntax (all key files)
+        working-directory: backend
+        run: |
+          node --check server.js
+          node --check config.js
+          node --check routes/api.js
+          node --check services/poller.js
+          node --check services/cache.js
+          node --check services/bottleneck.js
+          node --check adapters/github.js
+          node --check adapters/jira.js
+          node --check adapters/selfhealing.js
+
+      - name: Verify all modules load without errors
+        working-directory: backend
+        run: |
+          node -e "require('./config')"
+          node -e "require('./services/cache')"
+          node -e "require('./services/bottleneck')"
+          node -e "require('./adapters/selfhealing')"
+          node -e "require('./routes/api')"
+        env:
+          # Dummy values so modules that read env vars don't crash on load
+          GITHUB_TOKEN: dummy
+          JIRA_BASE_URL: https://issues.apache.org/jira
+
+  # ── Frontend ─────────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend — Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+        env:
+          # Use placeholder so VITE_API_URL is defined but won't be called
+          VITE_API_URL: https://placeholder.railway.app
+          VITE_WS_URL: wss://placeholder.railway.app/ws

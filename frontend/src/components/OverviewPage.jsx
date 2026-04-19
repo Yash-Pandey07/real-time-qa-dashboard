@@ -309,6 +309,7 @@ export default function OverviewPage({ ciRuns, heatmapData, jiraData, testData, 
       )}
 
       {/* Self-Healing Pipeline Panel */}
+      <div style={{ marginTop: 20 }}>
       {selfHealingData?.repos?.length > 0 && (() => {
         const riyaRepo = selfHealingData.repos.find(r => r.dashboardData);
         const latest   = riyaRepo?.dashboardData?.latest;
@@ -364,6 +365,7 @@ export default function OverviewPage({ ciRuns, heatmapData, jiraData, testData, 
           </Panel>
         );
       })()}
+      </div>
     </div>
   );
 }

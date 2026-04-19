@@ -59,7 +59,7 @@ The dashboard is a **live QA intelligence platform** that answers these question
 | Backend framework | Express.js | Minimal, well-understood HTTP framework; easy to add REST endpoints |
 | Real-time protocol | WebSockets (`ws` library) | Persistent two-way connection — server pushes data to browser the instant new data arrives, no polling from the browser side |
 | HTTP client (backend) | Axios | Handles retries, timeouts, auth headers cleanly |
-| Scheduling | setInterval (native) | Simple enough for this use case; node-cron would add complexity without benefit at this scale |
+| Scheduling | setInterval (native) | Simple enough for this use case; node-cron was evaluated and removed as unused |
 | Frontend framework | React 18 | Component-based UI — each dashboard section is an isolated component, easy to update or replace |
 | Frontend build tool | Vite | Fastest dev server available; hot module replacement means instant UI changes during development |
 | Charts | Recharts | Built specifically for React; composable, responsive, works well with live data |
@@ -92,7 +92,8 @@ real time QA dashboard/
 │   ├── config.js                   ← All configuration: repos, Jira projects, intervals
 │   ├── adapters/
 │   │   ├── github.js               ← Fetches CI runs + test data from GitHub API
-│   │   └── jira.js                 ← Fetches issues + metrics from Jira REST API v2
+│   │   ├── jira.js                 ← Fetches issues + metrics from Jira REST API v2
+│   │   └── selfhealing.js          ← Fetches CI run data + dashboard-data branch from riyabhatia45/QAi
 │   ├── services/
 │   │   ├── cache.js                ← In-memory TTL cache (avoids hammering APIs)
 │   │   ├── poller.js               ← Scheduler: runs adapters on a timer, broadcasts results
@@ -116,8 +117,12 @@ real time QA dashboard/
 │           ├── CIPipeline.jsx      ← Open Source CI Pipelines — filterable run table
 │           ├── JiraBoard.jsx       ← KAFKA · HADOOP · SPARK (JIRA) — charts + issue table
 │           ├── TestResults.jsx     ← Zephyr-format test cycles + executions
-│           └── Bottlenecks.jsx     ← AI-detected issues with recommendations
+│           ├── Bottlenecks.jsx     ← Rule-based auto-detected issues with recommendations
+│           └── SelfHealingPipeline.jsx ← Self-healing CI metrics, test breakdown, run history
 │
+├── .github/
+│   └── workflows/
+│       └── ci.yml                  ← GitHub Actions CI: syntax check (backend) + build (frontend) on every push/PR
 ├── .env.example                    ← Template for environment variables
 ├── start.bat                       ← Windows one-click launcher
 └── ARCHITECTURE.md                 ← This file
@@ -171,7 +176,38 @@ real time QA dashboard/
 
 ---
 
-### 4.3 GitHub Check Runs → Zephyr Format (Test Results)
+### 4.3 Self-Healing Pipeline (riyabhatia45/QAi)
+
+**What it provides:** Live CI data and historical healing metrics from the team's self-healing Playwright automation repo.
+
+**How it works — two data layers:**
+
+| Layer | Source | What it gives |
+|-------|--------|--------------|
+| CI run status | GitHub Actions API `/actions/runs` | Live run list — running/passed/failed, branch, commit, duration. Polled every **60 seconds** so "running" status appears within 1 minute of a push |
+| Healing metrics + test results | `dashboard-data` branch (`raw.githubusercontent.com`) | `latest.json` (full per-test breakdown for latest run) + `history.json` (all historical run summaries). Polled every 60 seconds, cached for 55 seconds |
+
+**Real-time webhook:** When Riya's CI completes, GitHub sends a `workflow_run completed` POST to `/webhooks/github`. The backend verifies the HMAC signature, waits 5 seconds for `dashboard-data` to finish writing, then immediately re-fetches and broadcasts — updating all browsers within ~7 seconds of CI completion.
+
+**Data stored per run (in `dashboard-data` branch):**
+- `latest.json` — full run: stats (tests completed, selector heals, flow heals, failures, time saved, heal rate), per-test breakdown with steps/duration/events
+- `history.json` — array of all run summaries for trend/history view
+- `runs/<run-id>.json` — complete detail for each individual run
+
+**No database needed** — the `dashboard-data` branch is the free persistent store. Data accumulates automatically with every CI push.
+
+**Configuration in `config.js`:**
+```js
+selfHealing: {
+  repos: [
+    { owner: 'riyabhatia45', repo: 'QAi', label: "Riya's QAi", hasCiSummary: true, hasDashboardData: true },
+  ],
+}
+```
+
+---
+
+### 4.4 GitHub Check Runs → Zephyr Format (Test Results)
 
 **The challenge:** Zephyr Squad/Scale (the industry-standard test management tool) requires a Jira plugin — there's no public demo instance to connect to.
 
@@ -359,17 +395,17 @@ With the WebSocket pattern used here:
 
 ---
 
-## 8. AI Bottleneck Detection
+## 8. Auto-Detected Bottleneck Analysis
 
-### What "AI" means here
+### How detection works
 
-The bottleneck engine in `services/bottleneck.js` is **rule-based intelligence** — it analyses real data patterns to detect conditions that a senior engineer would recognise as problems. It is not a machine learning model. The "AI" label is justified because:
-- It reasons over data (not just displays it)
-- It generates natural-language explanations and recommendations
-- It prioritises findings by severity
-- It operates continuously without human intervention
+The bottleneck engine in `services/bottleneck.js` is **rule-based intelligence** — it analyses real data patterns to detect conditions that a senior engineer would recognise as problems. It is not a machine learning model. It:
+- Reasons over multi-source data (CI + Jira + Tests simultaneously)
+- Generates natural-language explanations and actionable recommendations
+- Prioritises findings by severity (critical → high → medium → low)
+- Operates continuously — re-runs after every poll without human intervention
 
-This is the same approach used in many production monitoring tools (PagerDuty, Datadog anomaly detection at its core is threshold + statistical rules).
+This is the same approach used in production monitoring tools like PagerDuty and Datadog (threshold + statistical rules at the core).
 
 ### The 8 Detection Rules
 
@@ -494,6 +530,26 @@ Two tabs:
 
 **Executions tab:** Flat list of every individual check-run mapped to a Zephyr test execution. Shows status icon, test name, cycle reference, status badge, duration, time ago, link.
 
+### Self-Healing Pipeline (`SelfHealingPipeline.jsx`)
+
+Dedicated section for the team's Playwright self-healing automation. Shows data from `riyabhatia45/QAi`.
+
+**Latest Run Metrics** — 7 KPI cards: Tests Run, Passed, Failed, Selector Heals, Flow Recoveries, Time Saved (Est.), Heal Success Rate — sourced from `latest.json`.
+
+**All-Time Totals** — aggregate across all stored runs in `history.json`: total tests, total heals, overall pass rate.
+
+**Test Case Breakdown** — collapsible table of every individual test from the latest run. Columns: Test ID, Status (Passed/Failed), Steps, Selector Heals, Flow Heals, Failures, Duration. Includes search box and pass/fail filter.
+
+**Run History** — collapsible table of all historical CI runs. Columns: Run#, Date, Branch, Tests, Passed, Failed, Sel. Heals, Flow Heals, Time Saved, Heal Rate, GitHub link. Filterable (All / Healthy / Had Failures) and sortable (Date / Heal Rate / Failures).
+
+**Activity Chart** — full-width 30-day bar chart. Each bar = one day; height = run count; colour = green (all passed) / amber (mostly passed) / orange (mostly failed) / red (all failed). Hover for day tooltip.
+
+**GitHub Actions Runs** — collapsible CI run list with search, status filters, commit info, duration, time-ago links.
+
+The Self-Healing panel also appears on the **Overview page** (clickable, navigates to Self-Healing tab) showing: latest run tests/passed/heal rate + all-time totals.
+
+---
+
 ### Bottlenecks
 Filterable by severity. Each card shows:
 - Severity icon + colour-coded left border
@@ -567,8 +623,9 @@ All endpoints are on `http://localhost:3001`.
 | GET | `/api/jira/projects` | Project summaries | — |
 | GET | `/api/tests/cycles` | Zephyr test cycles | — |
 | GET | `/api/tests/executions` | Zephyr test executions | `cycleKey=`, `status=`, `limit=` |
-| GET | `/api/bottlenecks` | AI-detected bottlenecks | — |
+| GET | `/api/bottlenecks` | Auto-detected bottlenecks | — |
 | POST | `/api/refresh` | Flush cache (force re-fetch) | — |
+| POST | `/webhooks/github` | GitHub webhook receiver — triggers immediate self-healing re-poll on `workflow_run completed` for `riyabhatia45/QAi`. Requires valid `x-hub-signature-256` header when `GITHUB_WEBHOOK_SECRET` is set. | — |
 
 ---
 
@@ -583,6 +640,7 @@ Connect to `ws://localhost:3001/ws`. All messages are JSON: `{ type, payload, ts
 | `jira:update` | After every Jira poll | `{ allIssues[], metrics{}, projects[], fetchedAt }` |
 | `tests:update` | After every test poll | `{ testCycles[], testExecutions[], summary{}, fetchedAt }` |
 | `bottlenecks:update` | After any poll (since bottlenecks are re-computed after each) | `{ bottlenecks[], detectedAt }` |
+| `selfhealing:update` | After every self-healing poll (every 60s) or webhook trigger | `{ repos[], fetchedAt }` — each repo has `runs`, `workflows`, `heatmap`, `summary`, `dashboardData` |
 | `pong` | In response to client sending `{ type: "ping" }` | `{ ts }` |
 
 ---
@@ -594,7 +652,7 @@ All environment variables in `backend/.env`:
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
 | `PORT` | `3001` | No | Backend server port |
-| `GITHUB_TOKEN` | — | **Yes** | GitHub PAT (no scopes needed). Without this, GitHub API returns 403 due to rate limits |
+| `GITHUB_TOKEN` | — | **Yes** | GitHub PAT (no scopes needed). Without this, GitHub API limited to 60 req/hr; a startup warning is logged if missing |
 | `JIRA_BASE_URL` | `https://issues.apache.org/jira` | No | Jira instance URL. Change to your company URL when ready |
 | `JIRA_EMAIL` | — | No | Your Atlassian account email (only needed for private Jira) |
 | `JIRA_TOKEN` | — | No | Jira API token (only needed for private Jira) |
@@ -602,14 +660,17 @@ All environment variables in `backend/.env`:
 | `ZEPHYR_BASE_URL` | — | No | Your Zephyr/Jira base URL |
 | `ZEPHYR_API_TOKEN` | — | No | Zephyr Scale Bearer token |
 | `ZEPHYR_PROJECT` | — | No | Zephyr project key |
+| `GITHUB_WEBHOOK_SECRET` | — | No | Secret string for verifying GitHub webhook HMAC signatures (`x-hub-signature-256`). Must match the secret set in `riyabhatia45/QAi` repo webhook settings. If not set, signature check is skipped (dev mode) |
+| `ALLOWED_ORIGIN` | `true` (open) | No | Restrict CORS to a specific frontend origin (e.g. `https://your-app.vercel.app`) in production |
 
 **Polling intervals** (change in `config.js`):
 
 | Source | Default interval | Why this value |
 |--------|-----------------|----------------|
-| GitHub CI runs | **600 seconds** (10 min) | Reduced to cut Railway egress costs; GitHub Actions data doesn't change faster than this in practice |
-| Jira issues | **900 seconds** (15 min) | Jira issues are updated infrequently; 15 min is fresh enough for a dashboard |
-| Test/check-runs | **600 seconds** (10 min) | Matches CI poll interval — test data comes from the same GitHub API |
+| GitHub CI runs (open source) | **600 seconds** (10 min) | Reduced to cut Railway egress costs |
+| Jira issues | **900 seconds** (15 min) | Issues are updated infrequently; 15 min is fresh enough |
+| Test/check-runs | **600 seconds** (10 min) | Matches CI poll — same GitHub API source |
+| Self-Healing pipeline | **60 seconds** (1 min) | Shows live "running" status within 1 min of a push; `dashboard-data` fetch is a cheap raw CDN request, not a GitHub API call |
 
 > **Note:** Earlier versions used 90s/120s intervals. These were reduced in April 2025 to lower Railway egress bandwidth costs. If you are running this locally with no cost constraints, you can lower them back to 90s in `config.js`.
 
@@ -654,7 +715,21 @@ All environment variables in `backend/.env`:
 - In production, `App.jsx` prefixes all fetch calls with `VITE_API_URL` (falls back to empty string → Vite proxy in local dev)
 
 ### CORS
-Backend allows all origins (`origin: true`) to support the Vercel frontend domain without hardcoding it.
+Backend defaults to `origin: true` (open) for local development. In production, set `ALLOWED_ORIGIN=https://your-app.vercel.app` as a Railway environment variable to restrict to your Vercel domain only.
+
+### GitHub Actions CI (`.github/workflows/ci.yml`)
+Runs automatically on every push and pull request to `main`. Free on GitHub (public repos get unlimited minutes).
+
+**Two parallel jobs:**
+
+| Job | Steps | What it catches |
+|-----|-------|----------------|
+| `backend` | `npm ci` → `node --check` on all 9 key files → load all modules | Syntax errors, broken imports, missing dependencies |
+| `frontend` | `npm ci` → `npm run build` (full Vite production build) | JSX errors, broken imports, missing components |
+
+If either job fails, GitHub blocks the merge and shows a red ✗ on the PR — preventing a broken build from reaching Railway or Vercel.
+
+To add more checks in future (e.g. ESLint, Jest tests), add steps inside the relevant job in `ci.yml`.
 
 ---
 
@@ -706,4 +781,4 @@ None of this changes. You update `config.js` with your own repos and Jira projec
 
 ---
 
-*Last updated: April 2026 — reflects current deployed state including Overview landing page, Open Source CI Pipelines labels, KAFKA/HADOOP/SPARK JIRA project labels, and updated polling intervals.*
+*Last updated: April 2026 — reflects current deployed state including Self-Healing Pipeline section (dashboard-data branch integration, GitHub webhook, per-test breakdown, run history), Overview landing page, auto-detected bottleneck analysis, security hardening (HMAC webhook verification, CORS origin control, startup token warning), and updated polling intervals.*
