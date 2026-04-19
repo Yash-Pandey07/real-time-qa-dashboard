@@ -36,7 +36,8 @@ module.exports = {
     repos: [
       { owner: 'riyabhatia45',   repo: 'QAi',                              label: 'Playwright Self-Healing', hasCiSummary: true,  hasDashboardData: true  },
       // { owner: 'Yash-Pandey07',  repo: 'QAi',                              label: 'Playwright Self-Healing (Test Fork)', hasCiSummary: true,  hasDashboardData: true  },
-      { owner: 'gautamakky10',   repo: 'agentic-self-healing-framework-gv', label: 'Selenium Self-Healing',   hasCiSummary: false, hasDashboardData: true  },
+      { owner: 'gautamakky10',   repo: 'agentic-self-healing-framework-gv', label: 'Selenium Self-Healing - 1',        hasCiSummary: false, hasDashboardData: true  },
+      { owner: 'priya-thapliyal', repo: 'agentic-self-healing-framework',    label: 'Selenium Self-Healing - 2', hasCiSummary: false, hasDashboardData: true  },
     ],
   },
   poll: {
