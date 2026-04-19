@@ -9,7 +9,7 @@ on:
 jobs:
   # ── Backend ──────────────────────────────────────────────────────────────────
   backend:
-    name: Backend — Lint & Syntax
+    name: Backend — Lint, Syntax & Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -48,13 +48,19 @@ jobs:
           node -e "require('./adapters/selfhealing')"
           node -e "require('./routes/api')"
         env:
-          # Dummy values so modules that read env vars don't crash on load
+          GITHUB_TOKEN: dummy
+          JIRA_BASE_URL: https://issues.apache.org/jira
+
+      - name: Run unit & API tests
+        working-directory: backend
+        run: npm test -- --testPathPatterns="cache|bottleneck|api" --forceExit
+        env:
           GITHUB_TOKEN: dummy
           JIRA_BASE_URL: https://issues.apache.org/jira
 
   # ── Frontend ─────────────────────────────────────────────────────────────────
   frontend:
-    name: Frontend — Build
+    name: Frontend — Build & Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -71,10 +77,16 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Run component tests
+        working-directory: frontend
+        run: npm test
+        env:
+          VITE_API_URL: https://placeholder.railway.app
+          VITE_WS_URL: wss://placeholder.railway.app/ws
+
       - name: Build
         working-directory: frontend
         run: npm run build
         env:
-          # Use placeholder so VITE_API_URL is defined but won't be called
           VITE_API_URL: https://placeholder.railway.app
           VITE_WS_URL: wss://placeholder.railway.app/ws

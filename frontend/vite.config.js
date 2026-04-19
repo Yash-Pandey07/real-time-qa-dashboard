@@ -10,4 +10,9 @@ export default defineConfig({
       '/ws':  { target: 'ws://localhost:3001',  ws: true, changeOrigin: true },
     },
   },
+  test: {
+    environment: 'happy-dom',
+    globals: true,
+    setupFiles: './src/tests/setup.js',
+  },
 });
