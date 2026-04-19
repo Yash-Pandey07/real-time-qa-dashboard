@@ -226,7 +226,30 @@ async function fetchDashboardBranchData(owner, repo) {
       axios.get(`${base}/latest.json`, { timeout: 10000 }),
       axios.get(`${base}/history.json`, { timeout: 10000 }),
     ]);
-    const result = { latest: latestRes.data, history: historyRes.data };
+    const raw = latestRes.data;
+    // Normalize flat format (Gautam-style) into nested stats/workflow format (Riya-style)
+    const latest = raw.stats ? raw : {
+      generatedAt: raw.generatedAt,
+      runs: raw.runs || [],
+      stats: {
+        totalTestsCompleted: raw.totalTestsCompleted,
+        totalSelectorHeals:  raw.totalSelectorHeals,
+        totalFlowHeals:      raw.totalFlowHeals,
+        totalFailures:       raw.totalFailures,
+        estimatedTimeSaved:  raw.estimatedTimeSaved,
+        healSuccessRate:     raw.healSuccessRate,
+      },
+      workflow: {
+        runId:        raw.runId,
+        runNumber:    raw.runNumber,
+        workflowName: raw.workflowName,
+        repository:   raw.repository,
+        branch:       raw.branch,
+        commitSha:    raw.commitSha,
+        event:        raw.event,
+      },
+    };
+    const result = { latest, history: historyRes.data };
     cache.set(cacheKey, result, 55);   // just under poll interval so each cycle gets fresh data
     return result;
   } catch (err) {

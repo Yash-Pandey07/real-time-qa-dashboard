@@ -57,13 +57,14 @@ function broadcast(type, payload) {
 
 poller.start(broadcast);
 
-// ─── GitHub Webhook (instant update when Riya's CI completes) ─────────────────
-// Setup: riyabhatia45/QAi → Settings → Webhooks
-//   Payload URL: https://<railway-url>/webhooks/github
+// ─── GitHub Webhook (instant update when self-healing CI completes) ───────────
+// Setup per watched repo → Settings → Webhooks
+//   Payload URL: https://real-time-qa-dashboard-production-f158.up.railway.app/webhooks/github
 //   Content type: application/json
 //   Secret: value of GITHUB_WEBHOOK_SECRET env var
 //   Events: Workflow runs
 const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET;
+const WATCHED_SELF_HEALING_REPOS = config.selfHealing.repos.map(r => `${r.owner}/${r.repo}`);
 
 function verifyGithubSignature(req) {
   if (!WEBHOOK_SECRET) return true; // skip verification if secret not configured (dev mode)
@@ -83,8 +84,8 @@ app.post('/webhooks/github', (req, res) => {
   const action = req.body?.action;
   const repo   = req.body?.workflow_run?.head_repository?.full_name || req.body?.repository?.full_name;
 
-  if (event === 'workflow_run' && action === 'completed' && repo === 'riyabhatia45/QAi') {
-    console.log('[Webhook] workflow_run completed on riyabhatia45/QAi — triggering immediate self-healing poll');
+  if (event === 'workflow_run' && action === 'completed' && WATCHED_SELF_HEALING_REPOS.includes(repo)) {
+    console.log(`[Webhook] workflow_run completed on ${repo} — triggering immediate self-healing poll`);
     setTimeout(() => poller.pollSelfHealingNow(), 5000);
   }
 });
