@@ -130,13 +130,13 @@ function HealingMetrics({ ciSummary, dashboardData, repoUrl }) {
   if (dashboardData?.latest) {
     const s  = dashboardData.latest.stats || {};
     const wf = dashboardData.latest.workflow || {};
-    const passed   = (s.totalTestsCompleted || 0) - (s.totalFailures || 0);
     const healRate = parseFloat(s.healSuccessRate || 0);
 
+    // totalFailures = step-level selector failures the healer had to handle,
+    // NOT test-level failures. Tests that complete via healing still count as passed.
     const latest = [
       { label: 'Tests Run',        value: s.totalTestsCompleted ?? '—', icon: TestTube,    color: '#60a5fa' },
-      { label: 'Passed',           value: passed,                        icon: CheckCircle, color: '#22c55e' },
-      { label: 'Failed',           value: s.totalFailures ?? '—',        icon: XCircle,     color: '#ef4444' },
+      { label: 'Step Failures',    value: s.totalFailures ?? '—',        icon: XCircle,     color: '#ef4444' },
       { label: 'Selector Heals',   value: s.totalSelectorHeals ?? '—',   icon: Shield,      color: '#a78bfa' },
       { label: 'Flow Recoveries',  value: s.totalFlowHeals ?? '—',       icon: RefreshCw,   color: '#34d399' },
       { label: 'Time Saved (Est.)',value: `${s.estimatedTimeSaved ?? 0}h`,icon: Clock,       color: '#f59e0b' },
@@ -146,21 +146,21 @@ function HealingMetrics({ ciSummary, dashboardData, repoUrl }) {
     // Aggregate totals from history
     const hist = dashboardData.history || [];
     const totals = hist.reduce((acc, r) => ({
-      tests:    acc.tests    + (r.totalTestsCompleted || 0),
-      failures: acc.failures + (r.totalFailures || 0),
-      selHeals: acc.selHeals + (r.totalSelectorHeals || 0),
-      flowHeals:acc.flowHeals+ (r.totalFlowHeals || 0),
-    }), { tests: 0, failures: 0, selHeals: 0, flowHeals: 0 });
-    const allTimePassed = totals.tests - totals.failures;
-    const allTimePassRate = totals.tests ? Math.round((allTimePassed / totals.tests) * 100) : 0;
+      tests:       acc.tests       + (r.totalTestsCompleted || 0),
+      stepFails:   acc.stepFails   + (r.totalFailures || 0),
+      selHeals:    acc.selHeals    + (r.totalSelectorHeals || 0),
+      flowHeals:   acc.flowHeals   + (r.totalFlowHeals || 0),
+      healRateSum: acc.healRateSum + parseFloat(r.healSuccessRate || 0),
+      runCount:    acc.runCount    + 1,
+    }), { tests: 0, stepFails: 0, selHeals: 0, flowHeals: 0, healRateSum: 0, runCount: 0 });
+    const avgHealRate = totals.runCount ? Math.round(totals.healRateSum / totals.runCount) : 0;
 
     const historical = [
-      { label: 'Total Tests Run',  value: totals.tests,    icon: TestTube,    color: '#60a5fa' },
-      { label: 'Total Passed',     value: allTimePassed,   icon: CheckCircle, color: '#22c55e' },
-      { label: 'Total Failures',   value: totals.failures, icon: XCircle,     color: '#ef4444' },
-      { label: 'Total Sel. Heals', value: totals.selHeals, icon: Shield,      color: '#a78bfa' },
-      { label: 'Total Flow Heals', value: totals.flowHeals,icon: RefreshCw,   color: '#34d399' },
-      { label: 'Overall Pass Rate',value: `${allTimePassRate}%`, icon: TrendingUp, color: allTimePassRate >= 70 ? '#22c55e' : '#f59e0b' },
+      { label: 'Total Tests Run',     value: totals.tests,     icon: TestTube,    color: '#60a5fa' },
+      { label: 'Total Step Failures', value: totals.stepFails, icon: XCircle,     color: '#ef4444' },
+      { label: 'Total Sel. Heals',    value: totals.selHeals,  icon: Shield,      color: '#a78bfa' },
+      { label: 'Total Flow Heals',    value: totals.flowHeals, icon: RefreshCw,   color: '#34d399' },
+      { label: 'Avg Heal Rate',       value: `${avgHealRate}%`,icon: TrendingUp,  color: avgHealRate >= 70 ? '#22c55e' : '#f59e0b' },
     ];
 
     return (
@@ -242,14 +242,14 @@ function HealingMetrics({ ciSummary, dashboardData, repoUrl }) {
 function ActivityChart({ heatmap }) {
   const [hovered, setHovered] = useState(null);
 
-  const last30 = useMemo(() => {
+  const last15 = useMemo(() => {
     const now = Date.now();
     return heatmap
-      .filter(d => now - new Date(d.date + 'T12:00:00Z') <= 30 * 86400000)
+      .filter(d => now - new Date(d.date + 'T12:00:00Z') <= 15 * 86400000)
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [heatmap]);
 
-  const maxTotal = Math.max(...last30.map(d => d.total), 1);
+  const maxTotal = Math.max(...last15.map(d => d.total), 1);
 
   function barColor(day) {
     if (!day.total) return '#1e293b';
@@ -260,39 +260,70 @@ function ActivityChart({ heatmap }) {
 
   return (
     <div style={{ position: 'relative' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 80, width: '100%' }}>
-        {last30.map((day, i) => {
-          const heightPct = day.total ? Math.max((day.total / maxTotal) * 100, 8) : 4;
-          const color = barColor(day);
-          const isHovered = hovered?.date === day.date;
+      {/* Bar chart — taller + wider bars now that we only show 15 days */}
+      <div style={{ position: 'relative', height: 140 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: '100%', width: '100%' }}>
+          {last15.map((day, i) => {
+            const heightPct = day.total ? Math.max((day.total / maxTotal) * 100, 5) : 3;
+            const color = barColor(day);
+            const isHovered = hovered?.date === day.date;
+            return (
+              <div
+                key={day.date}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%', cursor: day.total ? 'pointer' : 'default' }}
+                onMouseEnter={() => day.total && setHovered({ ...day, index: i })}
+                onMouseLeave={() => setHovered(null)}
+              >
+                <div style={{
+                  width: '100%',
+                  height: `${heightPct}%`,
+                  background: color,
+                  borderRadius: '4px 4px 0 0',
+                  opacity: isHovered ? 1 : (day.total ? 0.72 : 0.15),
+                  transition: 'opacity 0.15s, box-shadow 0.15s',
+                  minHeight: 4,
+                  boxShadow: isHovered ? `0 0 12px ${color}90` : 'none',
+                }} />
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Tooltip — anchored inside the bar area, tracks the hovered bar horizontally */}
+        {hovered && (() => {
+          const pct = ((hovered.index + 0.5) / last15.length) * 100;
+          const isLeft  = hovered.index < 2;
+          const isRight = hovered.index >= last15.length - 2;
+          const hStyle = isLeft
+            ? { left: 0 }
+            : isRight
+              ? { right: 0, left: 'auto' }
+              : { left: `${pct}%`, transform: 'translateX(-50%)' };
           return (
-            <div
-              key={day.date}
-              style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', cursor: day.total ? 'pointer' : 'default' }}
-              onMouseEnter={() => day.total && setHovered(day)}
-              onMouseLeave={() => setHovered(null)}
-            >
-              <div style={{
-                width: '100%',
-                height: `${heightPct}%`,
-                background: color,
-                borderRadius: '3px 3px 0 0',
-                opacity: isHovered ? 1 : (day.total ? 0.75 : 0.2),
-                transition: 'opacity 0.15s',
-                minHeight: 3,
-                boxShadow: isHovered ? `0 0 8px ${color}80` : 'none',
-              }} />
+            <div style={{
+              position: 'absolute', top: 8, ...hStyle,
+              background: '#0f172a', border: '1px solid #334155', borderRadius: 10,
+              padding: '10px 14px', fontSize: 12, color: '#f1f5f9', whiteSpace: 'nowrap',
+              zIndex: 50, pointerEvents: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+            }}>
+              <div style={{ fontWeight: 600, marginBottom: 6, color: '#94a3b8', fontSize: 11 }}>{hovered.date}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <div style={{ color: STATUS_COLORS.success }}>✓ {hovered.success} passed</div>
+                {hovered.failure > 0 && <div style={{ color: STATUS_COLORS.failure }}>✗ {hovered.failure} failed</div>}
+                {hovered.running > 0 && <div style={{ color: STATUS_COLORS.running }}>↻ {hovered.running} running</div>}
+                <div style={{ color: '#475569', borderTop: '1px solid #1e293b', marginTop: 3, paddingTop: 3 }}>{hovered.total} total runs</div>
+              </div>
             </div>
           );
-        })}
+        })()}
       </div>
 
-      {/* X-axis labels (every 5 days) */}
-      <div style={{ display: 'flex', marginTop: 6 }}>
-        {last30.map((day, i) => (
+      {/* X-axis labels — every 3 days for 15-day view */}
+      <div style={{ display: 'flex', marginTop: 8 }}>
+        {last15.map((day, i) => (
           <div key={day.date} style={{ flex: 1, textAlign: 'center' }}>
-            {i % 5 === 0 && (
-              <span style={{ fontSize: 9, color: '#475569' }}>
+            {i % 3 === 0 && (
+              <span style={{ fontSize: 10, color: '#475569' }}>
                 {new Date(day.date + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </span>
             )}
@@ -300,27 +331,12 @@ function ActivityChart({ heatmap }) {
         ))}
       </div>
 
-      {/* Tooltip */}
-      {hovered && (
-        <div style={{
-          position: 'absolute', bottom: 'calc(100% + 10px)', left: '50%', transform: 'translateX(-50%)',
-          background: '#1e293b', border: '1px solid #334155', borderRadius: 8,
-          padding: '10px 14px', fontSize: 12, color: '#f1f5f9', whiteSpace: 'nowrap', zIndex: 50, pointerEvents: 'none',
-        }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>{hovered.date}</div>
-          <div style={{ color: STATUS_COLORS.success }}>✓ {hovered.success} passed</div>
-          {hovered.failure > 0 && <div style={{ color: STATUS_COLORS.failure }}>✗ {hovered.failure} failed</div>}
-          {hovered.running > 0 && <div style={{ color: STATUS_COLORS.running }}>↻ {hovered.running} running</div>}
-          <div style={{ color: '#64748b', marginTop: 2 }}>{hovered.total} total</div>
-        </div>
-      )}
-
       {/* Legend */}
-      <div style={{ display: 'flex', gap: 14, marginTop: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 16, marginTop: 12, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
         {[['#22c55e', 'All passed'], ['#84cc16', 'Mostly passed'], ['#f97316', 'Mostly failed'], ['#ef4444', 'All failed']].map(([c, l]) => (
-          <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ width: 10, height: 10, borderRadius: 2, background: c }} />
-            <span style={{ fontSize: 10, color: '#64748b' }}>{l}</span>
+            <span style={{ fontSize: 11, color: '#64748b' }}>{l}</span>
           </div>
         ))}
       </div>
@@ -334,14 +350,18 @@ function TestCaseTable({ runs }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  // A test passes if it completed (testsCompleted > 0) even when step failures were healed.
+  // failures here = step-level selector failures, not the test outcome.
+  const testPassed = t => (t.testsCompleted ?? 0) > 0 || t.failures === 0;
+
   const filtered = useMemo(() => {
     let r = runs;
-    if (statusFilter !== 'all') r = r.filter(t => statusFilter === 'passed' ? t.failures === 0 : t.failures > 0);
+    if (statusFilter !== 'all') r = r.filter(t => statusFilter === 'passed' ? testPassed(t) : !testPassed(t));
     if (search.trim()) r = r.filter(t => t.testId?.toLowerCase().includes(search.toLowerCase()));
     return r;
   }, [runs, search, statusFilter]);
 
-  const passCount = runs.filter(t => t.failures === 0).length;
+  const passCount = runs.filter(testPassed).length;
   const failCount = runs.length - passCount;
 
   return (
@@ -387,7 +407,8 @@ function TestCaseTable({ runs }) {
             </thead>
             <tbody>
               {filtered.map((r, i) => {
-                const passed = r.failures === 0;
+                const passed = (r.testsCompleted ?? 0) > 0 || r.failures === 0;
+                const healed = passed && r.failures > 0;
                 const sc = passed ? '#22c55e' : '#ef4444';
                 const durSec = r.durationMs ? Math.round(r.durationMs / 1000) : 0;
                 const cleanId = r.testId?.replace(/_\d{4}-\d{2}-.*$/, '') || `Test ${i + 1}`;
@@ -399,7 +420,7 @@ function TestCaseTable({ runs }) {
                     </td>
                     <td style={{ padding: '9px 12px', textAlign: 'center' }}>
                       <span style={{ fontSize: 11, fontWeight: 600, color: sc, background: `${sc}18`, border: `1px solid ${sc}40`, borderRadius: 8, padding: '2px 8px' }}>
-                        {passed ? 'Passed' : 'Failed'}
+                        {passed ? (healed ? 'Healed' : 'Passed') : 'Failed'}
                       </span>
                     </td>
                     <td style={{ padding: '9px 12px', textAlign: 'center', color: '#94a3b8' }}>{r.totalSteps ?? '—'}</td>
@@ -442,7 +463,7 @@ function RunHistoryTable({ history, repoOwner, repoName }) {
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <Filter size={12} color="#475569" />
-          {[['all', `All (${history.length})`], ['healthy', `Healthy (${history.length - allFailed})`], ['failed', `Had Failures (${allFailed})`]].map(([v, l]) => (
+          {[['all', `All (${history.length})`], ['healthy', `No Heals Needed (${history.length - allFailed})`], ['failed', `Had Healing Events (${allFailed})`]].map(([v, l]) => (
             <button key={v} onClick={() => setFilterStatus(v)} style={{
               padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: filterStatus === v ? 600 : 400,
               cursor: 'pointer', border: filterStatus === v ? '1px solid #60a5fa' : '1px solid #1e293b',
@@ -467,21 +488,23 @@ function RunHistoryTable({ history, repoOwner, repoName }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ borderBottom: '1px solid #1e293b' }}>
-              {['Run', 'Date', 'Branch', 'Tests', 'Passed', 'Failed', 'Sel. Heals', 'Flow Heals', 'Time Saved', 'Heal Rate', ''].map(h => (
+              {['Run', 'Date', 'Branch', 'Tests', 'Step Failures', 'Sel. Heals', 'Flow Heals', 'Time Saved', 'Heal Rate', ''].map(h => (
                 <th key={h} style={{ padding: '8px 12px', textAlign: h === 'Run' || h === 'Date' || h === 'Branch' ? 'left' : 'center', color: '#64748b', fontWeight: 500, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {sorted.map((r, i) => {
-              const passed   = (r.totalTestsCompleted || 0) - (r.totalFailures || 0);
-              const healRate = parseFloat(r.healSuccessRate || 0);
-              const hasFail  = (r.totalFailures || 0) > 0;
-              const runUrl   = `https://github.com/${repoOwner}/${repoName}/actions/runs/${r.runId}`;
+              const healRate  = parseFloat(r.healSuccessRate || 0);
+              const hasFail   = (r.totalFailures || 0) > 0;
+              const allHealed = hasFail && (r.totalSelectorHeals || 0) + (r.totalFlowHeals || 0) >= (r.totalFailures || 0);
+              // green = no step failures, amber = all failures healed, red = unrecovered failures remain
+              const dotColor  = !hasFail ? '#22c55e' : allHealed ? '#f59e0b' : '#ef4444';
+              const runUrl    = `https://github.com/${repoOwner}/${repoName}/actions/runs/${r.runId}`;
               return (
                 <tr key={r.runId || i} style={{ borderBottom: '1px solid #0a1628', background: i % 2 === 0 ? 'transparent' : '#0a162815' }}>
                   <td style={{ padding: '9px 12px', color: '#94a3b8', fontWeight: 700 }}>
-                    <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: hasFail ? '#ef4444' : '#22c55e', marginRight: 6, verticalAlign: 'middle' }} />
+                    <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: dotColor, marginRight: 6, verticalAlign: 'middle' }} />
                     #{r.runNumber}
                   </td>
                   <td style={{ padding: '9px 12px', color: '#64748b', whiteSpace: 'nowrap' }}>{fmtDate(r.generatedAt)}</td>
@@ -491,7 +514,6 @@ function RunHistoryTable({ history, repoOwner, repoName }) {
                     </span>
                   </td>
                   <td style={{ padding: '9px 12px', textAlign: 'center', color: '#94a3b8' }}>{r.totalTestsCompleted ?? '—'}</td>
-                  <td style={{ padding: '9px 12px', textAlign: 'center', color: '#22c55e', fontWeight: 600 }}>{passed}</td>
                   <td style={{ padding: '9px 12px', textAlign: 'center', color: hasFail ? '#ef4444' : '#475569', fontWeight: hasFail ? 700 : 400 }}>{r.totalFailures ?? 0}</td>
                   <td style={{ padding: '9px 12px', textAlign: 'center', color: r.totalSelectorHeals > 0 ? '#a78bfa' : '#475569' }}>{r.totalSelectorHeals ?? 0}</td>
                   <td style={{ padding: '9px 12px', textAlign: 'center', color: r.totalFlowHeals > 0 ? '#34d399' : '#475569' }}>{r.totalFlowHeals ?? 0}</td>
@@ -683,7 +705,7 @@ function RepoView({ repoData }) {
 
       {/* Activity chart — collapsible, full width */}
       <CollapsibleSection
-        title="Activity — Last 30 Days"
+        title="Activity — Last 15 Days"
         icon={<Activity size={14} color="#60a5fa" />}
         defaultOpen={false}
       >

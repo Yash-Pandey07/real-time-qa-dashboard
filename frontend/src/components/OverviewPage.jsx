@@ -338,7 +338,7 @@ export default function OverviewPage({ ciRuns, heatmapData, jiraData, testData, 
               <>
                 <MetricBlock label="Tests Run"  value={totalTests || '—'} />
                 <MetricBlock label="Total Heals" value={totalHeals || '—'} color="#a78bfa" />
-                {totalFailures > 0 && <MetricBlock label="Failures" value={totalFailures} color="#ef4444" />}
+                {totalFailures > 0 && <MetricBlock label="Step Failures" value={totalFailures} color="#ef4444" />}
               </>
             }
             footer="View Self-Healing Details"
