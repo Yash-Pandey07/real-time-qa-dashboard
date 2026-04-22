@@ -32,3 +32,5 @@ dist-ssr
 *.env
 *.pptx
 *.mp4
+# Added by code-review-graph
+.code-review-graph/

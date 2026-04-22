@@ -28,20 +28,52 @@ const customTooltipStyle = {
   borderRadius: 6, fontSize: 12, padding: '6px 10px',
 };
 
+function getSprintName(field) {
+  if (!field) return null;
+  if (Array.isArray(field)) return field[field.length - 1]?.name || null;
+  return typeof field === 'string' ? field : null;
+}
+
 export default function JiraBoard({ jiraData = {} }) {
   const { allIssues = [], metrics = {} } = jiraData;
-  const [typeFilter, setTypeFilter]     = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter,     setTypeFilter]     = useState('all');
+  const [statusFilter,   setStatusFilter]   = useState('all');
+  const [projectFilter,  setProjectFilter]  = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [assigneeFilter, setAssigneeFilter] = useState('all');
+  const [labelFilter,    setLabelFilter]    = useState('all');
+  const [sprintFilter,   setSprintFilter]   = useState('all');
 
-  const types    = useMemo(() => ['all', ...new Set(allIssues.map(i => i.fields?.issuetype?.name).filter(Boolean))], [allIssues]);
-  const statuses = useMemo(() => ['all', ...new Set(allIssues.map(i => i.fields?.status?.name).filter(Boolean))], [allIssues]);
+  const types     = useMemo(() => ['all', ...new Set(allIssues.map(i => i.fields?.issuetype?.name).filter(Boolean))], [allIssues]);
+  const statuses  = useMemo(() => ['all', ...new Set(allIssues.map(i => i.fields?.status?.name).filter(Boolean))], [allIssues]);
+  const projects  = useMemo(() => ['all', ...new Set(allIssues.map(i => i._projectLabel).filter(Boolean))], [allIssues]);
+  const priorities= useMemo(() => ['all', ...new Set(allIssues.map(i => i.fields?.priority?.name).filter(Boolean))], [allIssues]);
+  const assignees = useMemo(() => ['all', ...new Set(allIssues.map(i => i.fields?.assignee?.displayName).filter(Boolean))], [allIssues]);
+  const labels    = useMemo(() => ['all', ...new Set(allIssues.flatMap(i => i.fields?.labels || []).filter(Boolean))], [allIssues]);
+  const sprints   = useMemo(() => {
+    const s = new Set(allIssues.map(i => getSprintName(i.fields?.customfield_10014)).filter(Boolean));
+    return s.size ? ['all', ...s] : [];
+  }, [allIssues]);
+
+  const anyFilterActive = typeFilter !== 'all' || statusFilter !== 'all' || projectFilter !== 'all' ||
+    priorityFilter !== 'all' || assigneeFilter !== 'all' || labelFilter !== 'all' || sprintFilter !== 'all';
+
+  function clearFilters() {
+    setTypeFilter('all'); setStatusFilter('all'); setProjectFilter('all');
+    setPriorityFilter('all'); setAssigneeFilter('all'); setLabelFilter('all'); setSprintFilter('all');
+  }
 
   const filtered = useMemo(() => {
     let r = allIssues;
-    if (typeFilter   !== 'all') r = r.filter(i => i.fields?.issuetype?.name === typeFilter);
-    if (statusFilter !== 'all') r = r.filter(i => i.fields?.status?.name    === statusFilter);
+    if (typeFilter     !== 'all') r = r.filter(i => i.fields?.issuetype?.name === typeFilter);
+    if (statusFilter   !== 'all') r = r.filter(i => i.fields?.status?.name    === statusFilter);
+    if (projectFilter  !== 'all') r = r.filter(i => i._projectLabel            === projectFilter);
+    if (priorityFilter !== 'all') r = r.filter(i => i.fields?.priority?.name  === priorityFilter);
+    if (assigneeFilter !== 'all') r = r.filter(i => i.fields?.assignee?.displayName === assigneeFilter);
+    if (labelFilter    !== 'all') r = r.filter(i => (i.fields?.labels || []).includes(labelFilter));
+    if (sprintFilter   !== 'all') r = r.filter(i => getSprintName(i.fields?.customfield_10014) === sprintFilter);
     return r.slice(0, 50);
-  }, [allIssues, typeFilter, statusFilter]);
+  }, [allIssues, typeFilter, statusFilter, projectFilter, priorityFilter, assigneeFilter, labelFilter, sprintFilter]);
 
   const statusData   = Object.entries(metrics.byStatus   || {}).map(([name, val]) => ({ name, val }));
   const priorityData = Object.entries(metrics.byPriority || {}).map(([name, val]) => ({ name, val }));
@@ -103,17 +135,34 @@ export default function JiraBoard({ jiraData = {} }) {
       </div>
 
       {/* Filters */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-          style={{ background: '#1e293b', border: '1px solid #334155', color: '#e2e8f0', borderRadius: 6, padding: '5px 8px', fontSize: 12 }}>
-          {types.map(t => <option key={t} value={t}>{t === 'all' ? 'All types' : t}</option>)}
-        </select>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-          style={{ background: '#1e293b', border: '1px solid #334155', color: '#e2e8f0', borderRadius: 6, padding: '5px 8px', fontSize: 12 }}>
-          {statuses.map(s => <option key={s} value={s}>{s === 'all' ? 'All statuses' : s}</option>)}
-        </select>
-        <span style={{ color: '#64748b', fontSize: 12, alignSelf: 'center' }}>
-          {filtered.length} issues
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        {[
+          { value: projectFilter,  set: setProjectFilter,  opts: projects,   allLabel: 'All projects'  },
+          { value: typeFilter,     set: setTypeFilter,     opts: types,      allLabel: 'All types'     },
+          { value: statusFilter,   set: setStatusFilter,   opts: statuses,   allLabel: 'All statuses'  },
+          { value: priorityFilter, set: setPriorityFilter, opts: priorities, allLabel: 'All priorities'},
+          { value: assigneeFilter, set: setAssigneeFilter, opts: assignees,  allLabel: 'All assignees' },
+          { value: labelFilter,    set: setLabelFilter,    opts: labels,     allLabel: 'All labels'    },
+          ...(sprints.length > 1 ? [{ value: sprintFilter, set: setSprintFilter, opts: sprints, allLabel: 'All sprints' }] : []),
+        ].map(({ value, set, opts, allLabel }) => (
+          <select key={allLabel} value={value} onChange={e => set(e.target.value)}
+            style={{
+              background: value !== 'all' ? '#1e293b' : '#0f172a',
+              border: `1px solid ${value !== 'all' ? '#60a5fa' : '#334155'}`,
+              color: value !== 'all' ? '#e2e8f0' : '#94a3b8',
+              borderRadius: 6, padding: '5px 8px', fontSize: 12, maxWidth: 160,
+            }}>
+            {opts.map(o => <option key={o} value={o}>{o === 'all' ? allLabel : o}</option>)}
+          </select>
+        ))}
+        {anyFilterActive && (
+          <button onClick={clearFilters} style={{
+            background: '#ef444418', border: '1px solid #ef444440', color: '#ef4444',
+            borderRadius: 6, padding: '5px 10px', fontSize: 12, cursor: 'pointer',
+          }}>Clear filters</button>
+        )}
+        <span style={{ color: '#64748b', fontSize: 12, marginLeft: 'auto' }}>
+          {filtered.length} of {allIssues.length} issues
         </span>
       </div>
 
