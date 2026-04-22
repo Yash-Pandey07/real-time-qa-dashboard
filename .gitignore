@@ -15,9 +15,20 @@ dist-ssr
 # Claude Code local config
 .claude/
 
-# AI editor config
+# AI editor configs (local only)
 .windsurf/
 .github/copilot-instructions.md
+.cursor/
+.cursorrules
+.kiro/
+.mcp.json
+.opencode.json
+.windsurfrules
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+DEMO_SCRIPT.md
+DEMO_VISUAL.html
 
 # Editor directories and files
 .vscode/*
