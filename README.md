@@ -1,4 +1,15 @@
 # QA Intelligence Dashboard
+<img width="1280" height="673" alt="Screenshot 2026-04-26 050625" src="https://github.com/user-attachments/assets/5fc7ccda-6814-48f2-9dbf-c502c6f2a16d" />
+<img width="1280" height="672" alt="Screenshot 2026-04-26 051012" src="https://github.com/user-attachments/assets/1d4ac935-67e0-46d3-812a-77c3b1d09a40" />
+<img width="1280" height="675" alt="Screenshot 2026-04-26 051113" src="https://github.com/user-attachments/assets/250354a3-69a8-4511-8871-f10c4ae3d5d1" />
+<img width="1280" height="672" alt="Screenshot 2026-04-26 051126" src="https://github.com/user-attachments/assets/406fdd51-1fbd-4599-9825-6bceb5747c09" />
+<img width="1280" height="575" alt="Screenshot 2026-04-26 051147" src="https://github.com/user-attachments/assets/5385100c-aac1-4d3e-87cb-3673e9c64182" />
+<img width="1280" height="673" alt="Screenshot 2026-04-26 051205" src="https://github.com/user-attachments/assets/0fc562b8-930e-4df7-a6e1-43c43de7095f" />
+<img width="1277" height="468" alt="Screenshot 2026-04-26 051213" src="https://github.com/user-attachments/assets/f2d4ba04-ce10-4752-b4c4-1bdfa8271acf" />
+<img width="1280" height="677" alt="Screenshot 2026-04-26 051223" src="https://github.com/user-attachments/assets/bce462b7-90bb-41c5-9fe2-8241cf03703e" />
+<img width="1280" height="631" alt="Screenshot 2026-04-26 051236" src="https://github.com/user-attachments/assets/2652c025-cc72-4c23-97db-c826f1480181" />
+<img width="1280" height="675" alt="Screenshot 2026-04-26 051252" src="https://github.com/user-attachments/assets/b09fc38b-6e50-487d-8702-ef0da660e822" />
+<img width="1280" height="592" alt="Screenshot 2026-04-26 051056" src="https://github.com/user-attachments/assets/152deaf4-315e-4896-94f7-c286fdf1e1fe" />
 
 A live QA intelligence platform that aggregates CI/CD pipeline status, Jira bug tracking, test results, and self-healing automation metrics into a single real-time dashboard — with auto-detected bottleneck analysis.
 
